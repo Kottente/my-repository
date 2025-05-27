@@ -1,1809 +1,415 @@
-Here are my all current files:// In ui/LocalFileManagerScreen.kt
-package com.example.datagrindset.ui
-
-import android.content.Intent
-import android.net.Uri
-import android.util.Log
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DataObject
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.OpenInNew // Added for "Open with"
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.AlertDialog // Added for dialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton // Added for dialog buttons
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.example.datagrindset.ProcessingStatus
-import com.example.datagrindset.ui.navigation.Screen
-import com.example.datagrindset.ui.theme.DataGrindsetTheme
-import com.example.datagrindset.viewmodel.DirectoryEntry
-import java.net.URLEncoder
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import androidx.core.net.toUri
-
-// Assuming SortOption enum is defined elsewhere and imported, e.g.:
-// package com.example.datagrindset.ui
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun LocalFileManagerScreen(
-    rootUriSelected: Boolean,
-    canNavigateUp: Boolean,
-    currentPath: String,
-    entries: List<DirectoryEntry>,
-    fileProcessingStatusMap: Map<Uri, Pair<ProcessingStatus, String?>>,
-    searchText: String,
-    onSearchTextChanged: (String) -> Unit,
-    currentSortOption: SortOption,
-    onSortOptionSelected: (SortOption) -> Unit,
-    onSelectRootDirectoryClicked: () -> Unit, // Used for initial selection AND changing root
-    onNavigateToFolder: (DirectoryEntry.FolderEntry) -> Unit,
-    onNavigateUp: () -> Unit,
-    navigateToAnalysisTarget: DirectoryEntry.FileEntry?, // From ViewModel to trigger navigation
-    onDidNavigateToAnalysisScreen: () -> Unit,          // Callback to ViewModel after navigation
-    suggestExternalAppForFile: DirectoryEntry.FileEntry?, // New: From ViewModel
-    onDidAttemptToOpenWithExternalApp: () -> Unit,      // New: Callback to ViewModel
-    onPrepareFileForAnalysis: (DirectoryEntry.FileEntry) -> Unit, // Renamed from onProcessFile
-    onDeleteEntry: (DirectoryEntry) -> Unit,
-    navController: NavController
-) {
-    var showSearchField by remember { mutableStateOf(false) }
-    var showSortAndOptionsKebabMenu by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-
-    // Effect to handle navigation when navigateToAnalysisTarget changes
-    LaunchedEffect(navigateToAnalysisTarget) {
-        navigateToAnalysisTarget?.let { fileEntry ->
-            val mimeType = fileEntry.mimeType?.lowercase()
-            val fileName = fileEntry.name.lowercase()
-            val uriString = fileEntry.uri.toString()
-            val isCsv = mimeType in listOf("text/csv", "application/csv", "text/comma-separated-values") ||
-                    fileName.endsWith(".csv")
-            val isTxt = mimeType in listOf("text/plain", "text/markdown") ||
-                    fileName.endsWith(".txt") || fileName.endsWith(".md")
-            val route = when {
-                isTxt -> "txtAnalysisScreen/${Uri.encode(uriString)}"
-                isCsv -> "csvAnalysisScreen/${URLEncoder.encode(uriString, "UTF-8")}/${URLEncoder.encode(fileName, "UTF-8")}"
-                else -> null
-            }
-            route?.let {
-                Log.d("LFM_Screen", "Navigating to internal analysis route: $it")
-                navController.navigate(it)
-            } ?: Log.w("LFM_Screen", "No internal analysis route determined for MIME type: ${fileEntry.mimeType}")
-            onDidNavigateToAnalysisScreen() // Reset the signal in ViewModel in all cases
-        }
-    }
-
-    // Effect to handle suggesting external app
-    suggestExternalAppForFile?.let { fileEntry ->
-        AlertDialog(
-            onDismissRequest = {
-                onDidAttemptToOpenWithExternalApp() // Reset signal if dialog is dismissed
-            },
-            title = { Text("Unsupported File Type") },
-            text = { Text("This file type (${fileEntry.mimeType ?: "unknown"}) is not directly supported by DataGrindset. Would you like to try opening it with an external application?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(fileEntry.uri, fileEntry.mimeType ?: "*/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) // Important for content URIs
-                    }
-                    try {
-                        val chooser = Intent.createChooser(intent, "Open with")
-                        context.startActivity(chooser)
-                    } catch (e: Exception) {
-                        Log.e("LFM_Screen", "Failed to start activity for ACTION_VIEW: ${e.message}")
-                        // Optionally, show a toast or another dialog here if no app can open it
-                    }
-                    onDidAttemptToOpenWithExternalApp() // Reset signal
-                }) {
-                    Text("Open with...")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    onDidAttemptToOpenWithExternalApp() // Reset signal
-                }) {
-                    Text("Cancel")
-                }
-            },
-            icon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = "Open with external app icon") }
-        )
-    }
-
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (showSearchField) {
-                        OutlinedTextField(
-                            value = searchText,
-                            onValueChange = onSearchTextChanged,
-                            modifier = Modifier.fillMaxWidth().padding(end = 8.dp),
-                            placeholder = { Text("Search in current folder...") },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                            )
-                        )
-                    } else {
-                        Text("DataGrindset")
-                    }
-                },
-                navigationIcon = {
-                    if (rootUriSelected && canNavigateUp) {
-                        IconButton(onClick = onNavigateUp) {
-                            Icon(Icons.Filled.ArrowUpward, contentDescription = "Navigate Up")
-                        }
-                    }
-                },
-                actions = {
-                    if (rootUriSelected) {
-                        if (!showSearchField) {
-                            IconButton(onClick = { showSearchField = true }) {
-                                Icon(Icons.Filled.Search, contentDescription = "Search Files")
-                            }
-                        } else {
-                            IconButton(onClick = {
-                                showSearchField = false
-                                onSearchTextChanged("")
-                            }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Close Search")
-                            }
-                        }
-                        IconButton(onClick = { navController.navigate("settings") }) {
-                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                        }
-                        Box {
-                            IconButton(onClick = { showSortAndOptionsKebabMenu = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More Options")
-                            }
-                            DropdownMenu(
-                                expanded = showSortAndOptionsKebabMenu,
-                                onDismissRequest = { showSortAndOptionsKebabMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Change Root Folder") },
-                                    onClick = {
-                                        onSelectRootDirectoryClicked()
-                                        showSortAndOptionsKebabMenu = false
-                                    },
-                                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = "Change Root Folder") }
-                                )
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                Text(
-                                    "Sort by",
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                DropdownMenuItem(text = { Text("Name (A-Z)") }, onClick = { onSortOptionSelected(SortOption.BY_NAME_ASC); showSortAndOptionsKebabMenu = false })
-                                DropdownMenuItem(text = { Text("Name (Z-A)") }, onClick = { onSortOptionSelected(SortOption.BY_NAME_DESC); showSortAndOptionsKebabMenu = false })
-                                DropdownMenuItem(text = { Text("Date (Newest)") }, onClick = { onSortOptionSelected(SortOption.BY_DATE_DESC); showSortAndOptionsKebabMenu = false })
-                                DropdownMenuItem(text = { Text("Date (Oldest)") }, onClick = { onSortOptionSelected(SortOption.BY_DATE_ASC); showSortAndOptionsKebabMenu = false })
-                                DropdownMenuItem(text = { Text("Size (Largest)") }, onClick = { onSortOptionSelected(SortOption.BY_SIZE_DESC); showSortAndOptionsKebabMenu = false })
-                                DropdownMenuItem(text = { Text("Size (Smallest)") }, onClick = { onSortOptionSelected(SortOption.BY_SIZE_ASC); showSortAndOptionsKebabMenu = false })
-                            }
-                        }
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            if (rootUriSelected) {
-                Text(
-                    text = "Current: $currentPath",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                if (entries.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            if (searchText.isEmpty()) "This folder is empty." else "No items found matching '$searchText'.",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
-                    ) {
-                        items(entries, key = { entry -> entry.id }) { entry ->
-                            when (entry) {
-                                is DirectoryEntry.FileEntry -> {
-                                    val statusPair = fileProcessingStatusMap[entry.uri]
-                                    FileListItem(
-                                        fileEntry = entry,
-                                        processingStatus = statusPair?.first ?: ProcessingStatus.NONE,
-                                        processingSummary = statusPair?.second,
-                                        onProcess = { onPrepareFileForAnalysis(entry) }, // This will now trigger the ViewModel logic which might lead to internal or external opening
-                                        onDelete = { onDeleteEntry(entry) }
-                                    )
-                                }
-                                is DirectoryEntry.FolderEntry -> FolderListItem(
-                                    folderEntry = entry,
-                                    onClick = { onNavigateToFolder(entry) },
-                                    onDelete = { onDeleteEntry(entry) }
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Icon(
-                            imageVector = Icons.Filled.FolderOpen,
-                            contentDescription = "Select Folder Icon",
-                            modifier = Modifier.size(64.dp).padding(bottom = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "Please select a root folder to browse.",
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                        Button(onClick = onSelectRootDirectoryClicked) {
-                            Text("Select Root Folder")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun FolderListItem(
-    folderEntry: DirectoryEntry.FolderEntry,
-    onClick: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Folder,
-                contentDescription = "Folder",
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.secondary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(folderEntry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${folderEntry.childCount} items", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.DeleteOutline, contentDescription = "Delete Folder", tint = MaterialTheme.colorScheme.error)
-            }
-            Icon(Icons.Filled.ChevronRight, contentDescription = "Open folder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun FileListItem(
-    fileEntry: DirectoryEntry.FileEntry,
-    processingStatus: ProcessingStatus,
-    processingSummary: String?,
-    onProcess: () -> Unit, // This callback now leads to prepareFileForAnalysis in ViewModel
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable(onClick = onProcess), // Modified: Clicking the whole item triggers onProcess
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = getIconForMimeType(fileEntry.mimeType),
-                contentDescription = "File type",
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(fileEntry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)) {
-                    Text("Size: ${formatFileSize(fileEntry.size)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Modified: ${formatDate(fileEntry.dateModified)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (processingStatus != ProcessingStatus.NONE || processingSummary != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ProcessingStatusIndicator(processingStatus)
-                        processingSummary?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontStyle = FontStyle.Italic,
-                                modifier = Modifier.padding(start = 6.dp),
-                                color = if (processingStatus == ProcessingStatus.UNSUPPORTED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2, // Allow more lines for "try opening with another app"
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            // The "Play" button is removed as the whole item is clickable for onProcess.
-            // If you still want a dedicated button for "Analyze/Open", you can add it back.
-            // For instance, an Icon representing "Open" or "More options for this file".
-            IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete File", tint = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
-
-// Helper function to get an appropriate icon based on MIME type
-
-
-
-// --- Previews ---
-@Preview(showBackground = true, name = "File Manager - No Root Selected")
-@Composable
-fun LocalFileManagerScreenNoRootPreview() {
-    DataGrindsetTheme {
-        LocalFileManagerScreen(
-            rootUriSelected = false,
-            canNavigateUp = false,
-            currentPath = "No folder selected",
-            entries = emptyList(),
-            fileProcessingStatusMap = emptyMap(),
-            searchText = "",
-            onSearchTextChanged = {},
-            currentSortOption = SortOption.BY_NAME_ASC,
-            onSortOptionSelected = {},
-            onSelectRootDirectoryClicked = {},
-            onNavigateToFolder = {},
-            onNavigateUp = {},
-            navigateToAnalysisTarget = null,
-            onDidNavigateToAnalysisScreen = {},
-            suggestExternalAppForFile = null, // New
-            onDidAttemptToOpenWithExternalApp = {}, // New
-            onPrepareFileForAnalysis = {},
-            onDeleteEntry = {},
-            navController = rememberNavController()
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "File Manager - With Root & Items")
-@Composable
-fun LocalFileManagerScreenWithRootPreview() {
-    DataGrindsetTheme {
-        val dummyFileUri1 = "content://com.example.dummyprovider/document/file1.csv".toUri()
-        val dummyFileUri2 = "content://com.example.dummyprovider/document/data.json".toUri() // Unsupported
-        val dummyFileUri3 = "content://com.example.dummyprovider/document/report.txt".toUri() // Supported
-        val dummyFolderUri1 = "content://com.example.dummyprovider/tree/folder1/document/folder1".toUri()
-
-
-        val sampleEntries = listOf(
-            DirectoryEntry.FolderEntry("folder_id_1", "Work Documents", dummyFolderUri1, 3),
-            DirectoryEntry.FileEntry("file_id_1", "Report Q1 2025.csv", dummyFileUri1, 12345, System.currentTimeMillis() - 100000000, "text/csv"),
-            DirectoryEntry.FileEntry("file_id_3", "Notes.txt", dummyFileUri3, 1024, System.currentTimeMillis() - 50000000, "text/plain"),
-            DirectoryEntry.FileEntry("file_id_2", "User Data Backup Long Name For Testing Ellipsis.json", dummyFileUri2, 6789000, System.currentTimeMillis() - 20000000, "application/json")
-        )
-        val sampleStatusMap = mapOf(
-            dummyFileUri1 to (ProcessingStatus.SUCCESS to "Ready to open CSV"),
-            dummyFileUri3 to (ProcessingStatus.SUCCESS to "Ready to open text"),
-            dummyFileUri2 to (ProcessingStatus.UNSUPPORTED to "File type not supported by this app. Try opening with another app.") // Example of unsupported
-        )
-        LocalFileManagerScreen(
-            rootUriSelected = true,
-            canNavigateUp = true,
-            currentPath = "My Phone Storage > Documents > Reports",
-            entries = sampleEntries,
-            fileProcessingStatusMap = sampleStatusMap,
-            searchText = "",
-            onSearchTextChanged = {},
-            currentSortOption = SortOption.BY_DATE_DESC,
-            onSortOptionSelected = {},
-            onSelectRootDirectoryClicked = {},
-            onNavigateToFolder = {},
-            onNavigateUp = {},
-            navigateToAnalysisTarget = null,
-            onDidNavigateToAnalysisScreen = {},
-            suggestExternalAppForFile = null, // New - For preview, keep null unless testing the dialog
-            // suggestExternalAppForFile = sampleEntries[3] as DirectoryEntry.FileEntry, // Example to show dialog in preview
-            onDidAttemptToOpenWithExternalApp = {}, // New
-            onPrepareFileForAnalysis = {},
-            onDeleteEntry = {},
-            navController = rememberNavController()
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "File Manager - Empty Folder")
-@Composable
-fun LocalFileManagerScreenEmptyFolderPreview() {
-    DataGrindsetTheme {
-        LocalFileManagerScreen(
-            rootUriSelected = true,
-            canNavigateUp = true,
-            currentPath = "My Phone Storage > Empty Folder",
-            entries = emptyList(),
-            fileProcessingStatusMap = emptyMap(),
-            searchText = "",
-            onSearchTextChanged = {},
-            currentSortOption = SortOption.BY_NAME_ASC,
-            onSortOptionSelected = {},
-            onSelectRootDirectoryClicked = {},
-            onNavigateToFolder = {},
-            onNavigateUp = {},
-            navigateToAnalysisTarget = null,
-            onDidNavigateToAnalysisScreen = {},
-            suggestExternalAppForFile = null, // New
-            onDidAttemptToOpenWithExternalApp = {}, // New
-            onPrepareFileForAnalysis = {},
-            onDeleteEntry = {},
-            navController = rememberNavController()
-        )
-    }
-}
-FileDisplayUtils:
-package com.example.datagrindset.ui
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.NoteAdd
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DataObject
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.NoteAdd
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.TableView
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import com.example.datagrindset.ProcessingStatus // Make sure this import is correct
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-// --- File Size Formatter (Extension Function) ---
-fun getIconForMimeType(mimeType: String?): ImageVector {
-    return when (mimeType?.lowercase()) {
-        "text/plain", "text/markdown" -> Icons.AutoMirrored.Filled.InsertDriveFile // Using AutoMirrored for LTR/RTL
-        "text/csv" -> Icons.Filled.DataObject // Or a more specific CSV icon if you have one
-        "application/pdf" -> Icons.Filled.PictureAsPdf
-        "image/jpeg", "image/png", "image/gif", "image/webp" -> Icons.Filled.Image
-        // Add more specific icons as needed
-        else -> Icons.AutoMirrored.Filled.InsertDriveFile // Default icon
-    }
-}
-
-// Helper function to format file size
-fun formatFileSize(sizeBytes: Long): String {
-    if (sizeBytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    val digitGroups = (Math.log10(sizeBytes.toDouble()) / Math.log10(1024.0)).toInt()
-    return String.format("%.1f %s", sizeBytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
-}
-
-// Helper function to format date
-fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
-
-
-@Composable
-fun ProcessingStatusIndicator(status: ProcessingStatus) {
-    val icon = when (status) {
-        ProcessingStatus.PENDING -> Icons.Filled.HourglassEmpty
-        ProcessingStatus.PROCESSING -> Icons.Filled.Sync // Or a CircularProgressIndicator
-        ProcessingStatus.SUCCESS -> Icons.Filled.CheckCircle
-        ProcessingStatus.FAILED, ProcessingStatus.UNSUPPORTED -> Icons.Filled.Error
-        ProcessingStatus.NONE -> return // Don't show an icon if no status
-        ProcessingStatus.ERROR -> return
-    }
-    val tint = when (status) {
-        ProcessingStatus.SUCCESS -> MaterialTheme.colorScheme.primary
-        ProcessingStatus.FAILED, ProcessingStatus.UNSUPPORTED -> MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Icon(
-        imageVector = icon,
-        contentDescription = "Status: $status",
-        tint = tint,
-        modifier = Modifier.size(18.dp)
-    )
-}
-//fun Long.formatFileSizes(): String {
-//    if (this < 0) return "N/A"
-//    if (this < 1024) return "$this B"
-//    val kb = this / 1024.0
-//    if (kb < 1024) return String.format(Locale.US, "%.2f KB", kb)
-//    val mb = kb / 1024.0
-//    if (mb < 1024) return String.format(Locale.US, "%.2f MB", mb)
-//    val gb = mb / 1024.0
-//    return String.format(Locale.US, "%.2f GB", gb)
-//}
-//fun formatFileSize(sizeInBytes: Long): String {
-//        if (sizeInBytes < 1024) return "$sizeInBytes B"
-//    val kb = sizeInBytes / 1024
-//    if (kb < 1024) return "$kb KB"
-//    val mb = kb / 1024
-//    if (mb < 1024) return "$mb MB"
-//    val gb = mb / 1024
-//    return "$gb GB"
-//}
-//// --- Date Formatter ---
-//@Composable
-//fun formatDate(timestamp: Long): String {
-//    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
-//    return dateFormat.format(Date(timestamp))
-//}
-
-//fun Long.formatFileSize(): String {
-//    if (this < 0) return "N/A"
-//    if (this < 1024) return "$this B"
-//    val kb = this / 1024.0
-//    if (kb < 1024) return String.format(Locale.US, "%.2f KB", kb)
-//    val mb = kb / 1024.0
-//    if (mb < 1024) return String.format(Locale.US, "%.2f MB", mb)
-//    val gb = mb / 1024.0
-//    return String.format(Locale.US, "%.2f GB", gb)
-//}
-// --- MimeType to Icon Mapper ---
-//fun getIconForMimeType(mimeType: String?): ImageVector {
-//    return when (mimeType?.lowercase(Locale.getDefault())) {
-//        "text/plain", "text/markdown" -> Icons.Filled.Description
-//        "text/csv", "application/csv", "text/comma-separated-values" -> Icons.Filled.TableView
-//        "application/pdf" -> Icons.Filled.PictureAsPdf
-//        "image/jpeg", "image/png", "image/gif", "image/webp" -> Icons.Filled.Image
-//        "video/mp4", "video/webm" -> Icons.Filled.Videocam
-//        "audio/mpeg", "audio/ogg", "audio/wav" -> Icons.Filled.Audiotrack
-//        "application/zip", "application/rar" -> Icons.Filled.Archive
-//        else -> Icons.AutoMirrored.Filled.InsertDriveFile // Generic file icon
-//    }
-//}
-
-// --- Processing Status Indicator Composable ---
-@Composable
-fun ProcessingStatusIndicator(statusPair: Pair<ProcessingStatus, String?>?) {
-    statusPair?.let { (status, message) ->
-        val (statusIcon, statusColor, statusText) = when (status) {
-            ProcessingStatus.PENDING -> Triple(Icons.Filled.Refresh, MaterialTheme.colorScheme.outline, "Pending: ${message ?: ""}")
-            ProcessingStatus.SUCCESS -> Triple(Icons.Filled.CheckCircle, MaterialTheme.colorScheme.primary, "Ready: ${message ?: ""}")
-            ProcessingStatus.ERROR -> Triple(Icons.Filled.Error, MaterialTheme.colorScheme.error, "Error: ${message ?: ""}")
-            ProcessingStatus.UNSUPPORTED -> Triple(Icons.AutoMirrored.Filled.NoteAdd, MaterialTheme.colorScheme.secondary, "Unsupported: ${message ?: ""}")
-            ProcessingStatus.NONE -> TODO()
-            ProcessingStatus.PROCESSING -> TODO()
-            ProcessingStatus.FAILED -> TODO()
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            Icon(statusIcon, contentDescription = "Status", tint = statusColor, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                statusText,
-                style = MaterialTheme.typography.labelSmall,
-                color = statusColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-//@Composable
-//fun ProcessingStatusIndicator(status: ProcessingStatus) {
-//    val (icon, color) = when (status) {
-//        ProcessingStatus.PENDING -> Icons.Filled.HourglassEmpty to MaterialTheme.colorScheme.onSurfaceVariant
-//        ProcessingStatus.PROCESSING -> Icons.Filled.Sync to MaterialTheme.colorScheme.secondary // Using Sync for rotating/processing
-//        ProcessingStatus.SUCCESS -> Icons.Filled.CheckCircle to MaterialTheme.colorScheme.tertiary // Usually a green-ish color
-//        ProcessingStatus.FAILED -> Icons.Filled.Error to MaterialTheme.colorScheme.error
-//        ProcessingStatus.NONE -> return // Don't show an icon if not processed yet, or choose a default
-//        ProcessingStatus.UNSUPPORTED -> TODO()
-//        ProcessingStatus.ERROR -> TODO()
-//    }
-//    Icon(imageVector = icon, contentDescription = "Status: $status", tint = color, modifier = Modifier.size(18.dp))
-//}
-TxtFileAnalysisScreen:package com.example.datagrindset.ui
-
-import android.net.Uri
-import android.util.Log
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.*
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import com.example.datagrindset.ui.theme.DataGrindsetTheme
-//import com.example.datagrindset.viewmodel.SummaryData // Keep this
-import com.example.datagrindset.viewmodel.TxtFileViewModel
-import com.example.datagrindset.TxtFileViewModelFactory
-//import kotlinx.coroutines.launch
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TxtFileAnalysisScreen(
-    navController: NavController,
-    fileUri: Uri
-) {
-    val context = LocalContext.current.applicationContext
-    val viewModel: TxtFileViewModel = viewModel(
-        factory = TxtFileViewModelFactory(context as android.app.Application, fileUri)
-    )
-
-    // ViewModel States
-    val fileName by viewModel.fileName.collectAsState()
-    val fileContent by viewModel.fileContent.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val searchResults by viewModel.searchResults.collectAsState()
-    val currentResultIndex by viewModel.currentResultIndex.collectAsState()
-    val totalResults by viewModel.totalResults.collectAsState()
-    val replaceQuery by viewModel.replaceQuery.collectAsState()
-    val isEditMode by viewModel.isEditMode.collectAsState()
-    val editableContent by viewModel.editableContent.collectAsState()
-    val isSaving by viewModel.isSaving.collectAsState()
-    val saveError by viewModel.saveError.collectAsState()
-    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
-    val showDiscardConfirmDialog by viewModel.showDiscardConfirmDialog.collectAsState()
-    val canUndo by viewModel.canUndo.collectAsState()
-    val canRedo by viewModel.canRedo.collectAsState()
-
-    // Basic Summary States
-    val summaryResult by viewModel.summaryResult.collectAsState()
-    val isGeneratingSummary by viewModel.isGeneratingSummary.collectAsState()
-    val summaryError by viewModel.summaryError.collectAsState()
-
-    // Detailed Summary States
-    val detailedSummaryData by viewModel.detailedSummaryData.collectAsState()
-    val isGeneratingDetailedSummary by viewModel.isGeneratingDetailedSummary.collectAsState()
-    val detailedSummaryError by viewModel.detailedSummaryError.collectAsState()
-
-
-    // Local UI states
-    var showMenu by remember { mutableStateOf(false) }
-    var showSearchBar by remember { mutableStateOf(false) }
-    var showSummarySheet by remember { mutableStateOf(false) }
-    var showDetailedSummarySheet by remember { mutableStateOf(false) } // For detailed summary
-
-    val searchBarFocusRequester = remember { FocusRequester() }
-    val editorFocusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    val textScrollState = rememberScrollState()
-    val editorScrollState = rememberScrollState()
-    var textLayoutResultState by remember { mutableStateOf<TextLayoutResult?>(null) }
-
-    val basicSummarySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val detailedSummarySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-
-    val saveAsLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/plain"),
-        onResult = { newFileUri: Uri? -> viewModel.onSaveAsUriReceived(newFileUri) }
-    )
-
-    LaunchedEffect(Unit) {
-        viewModel.initiateSaveAsEvent.collect { suggestedName ->
-            suggestedName?.let { saveAsLauncher.launch(it) }
-        }
-    }
-
-    val currentHighlightColor = MaterialTheme.colorScheme.primaryContainer
-    val otherHighlightColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-
-    LaunchedEffect(currentResultIndex, textLayoutResultState, searchResults.size, isEditMode, editableContent, fileContent) {
-        val activeScrollState = if (isEditMode) editorScrollState else textScrollState
-        val contentForLayout = if (isEditMode) editableContent else fileContent ?: ""
-        if (currentResultIndex != -1 && searchResults.isNotEmpty() && contentForLayout.isNotEmpty()) {
-            val currentMatchRange = searchResults.getOrNull(currentResultIndex)
-            currentMatchRange?.let { matchRange ->
-                if (!isEditMode && textLayoutResultState != null) {
-                    val currentTextLayoutResult = textLayoutResultState
-                    currentTextLayoutResult?.let { try { val offset = matchRange.first.coerceIn(0, it.layoutInput.text.length - 1); val boundingBox = it.getBoundingBox(offset); activeScrollState.animateScrollTo(boundingBox.top.toInt()) } catch (e: Exception) { Log.e("TxtFileAnalysisScreen", "Error calculating scroll for read mode: ${e.message}") } }
-                }
-            }
-        }
-    }
-
-    LaunchedEffect(saveError) {
-        saveError?.let { snackbarHostState.showSnackbar(message = it, duration = SnackbarDuration.Long); viewModel.clearSaveError() }
-    }
-
-    LaunchedEffect(isEditMode, showSearchBar) {
-        if (showSearchBar) searchBarFocusRequester.requestFocus()
-        else if (isEditMode) editorFocusRequester.requestFocus()
-    }
-
-    val annotatedFileContentForReadMode = remember(fileContent, searchQuery, searchResults, currentResultIndex, currentHighlightColor, otherHighlightColor) {
-        buildAnnotatedString {
-            val content = fileContent; if (content.isNullOrEmpty()) return@buildAnnotatedString; append(content)
-            if (searchQuery.isNotBlank() && searchResults.isNotEmpty()) {
-                searchResults.forEachIndexed { index, range -> try { if (range.first >= 0 && range.last < content.length && range.first <= range.last) addStyle(style = SpanStyle(background = if (index == currentResultIndex) currentHighlightColor else otherHighlightColor), start = range.first, end = range.last + 1) } catch (e: Exception) { Log.e("TxtFileAnalysisScreen", "Error applying style for range $range: ${e.message}") } }
-            }
-        }
-    }
-
-    BackHandler(enabled = (isEditMode && hasUnsavedChanges) || showSearchBar || showSummarySheet || showDetailedSummarySheet) {
-        when {
-            showSummarySheet -> { showSummarySheet = false; viewModel.clearSummary() }
-            showDetailedSummarySheet -> { showDetailedSummarySheet = false; viewModel.clearDetailedSummary() }
-            showSearchBar -> { showSearchBar = false; viewModel.clearSearch(); focusManager.clearFocus(true) }
-            isEditMode && hasUnsavedChanges -> viewModel.attemptExitEditMode()
-        }
-    }
-
-    if (showDiscardConfirmDialog) {
-        AlertDialog(onDismissRequest = { viewModel.cancelDiscardDialog() }, title = { Text("Unsaved Changes") }, text = { Text("You have unsaved changes. What would you like to do?") }, confirmButton = { TextButton(onClick = { viewModel.saveAndExitEditMode() }) { Text("Save") } }, dismissButton = { TextButton(onClick = { viewModel.confirmDiscardChanges() }) { Text("Discard") } })
-    }
-
-    // Basic Summary Bottom Sheet
-    if (showSummarySheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showSummarySheet = false; viewModel.clearSummary() },
-            sheetState = basicSummarySheetState,
-            windowInsets = WindowInsets(0.dp)
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("File Summary", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
-                if (isGeneratingSummary) CircularProgressIndicator(modifier = Modifier.padding(vertical = 20.dp))
-                else if (summaryError != null) Text("Error: $summaryError", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 20.dp))
-                else if (summaryResult != null) {
-                    SummaryInfoRow("Lines:", summaryResult!!.lineCount.toString())
-                    SummaryInfoRow("Words:", summaryResult!!.wordCount.toString())
-                    SummaryInfoRow("Characters (with spaces):", summaryResult!!.charCount.toString())
-                    SummaryInfoRow("Characters (no spaces):", summaryResult!!.charCountWithoutSpaces.toString())
-                } else Text("No summary available.", modifier = Modifier.padding(vertical = 20.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = { showSummarySheet = false; viewModel.clearSummary() }) { Text("Close") }
-            }
-        }
-    }
-
-    // Detailed Summary Bottom Sheet
-    if (showDetailedSummarySheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showDetailedSummarySheet = false; viewModel.clearDetailedSummary() },
-            sheetState = detailedSummarySheetState,
-            windowInsets = WindowInsets(0.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .navigationBarsPadding(), // Add padding for navigation bars
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Keywords / Topics", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 16.dp))
-                if (isGeneratingDetailedSummary) {
-                    CircularProgressIndicator(modifier = Modifier.padding(vertical = 20.dp))
-                } else if (detailedSummaryError != null) {
-                    Text("Error: $detailedSummaryError", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 20.dp))
-                } else if (!detailedSummaryData.isNullOrEmpty()) {
-                    detailedSummaryData?.forEach { (keyword, count) ->
-                        SummaryInfoRow("\"${keyword}\":", count.toString() + if (count == 0) "" else " occurrences")
-                    }
-                } else {
-                    Text("No detailed summary available or no keywords found.", modifier = Modifier.padding(vertical = 20.dp))
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = {
-                    showDetailedSummarySheet = false
-                    viewModel.clearDetailedSummary()
-                }) {
-                    Text("Close")
-                }
-            }
-        }
-    }
-
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (showSearchBar) BasicTextField(value = searchQuery, onValueChange = { viewModel.onSearchQueryChanged(it) }, modifier = Modifier.fillMaxWidth().focusRequester(searchBarFocusRequester).padding(end = 8.dp), textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface), cursorBrush = SolidColor(MaterialTheme.colorScheme.primary), singleLine = true, decorationBox = { innerTextField -> Box(modifier = Modifier.fillMaxWidth()) { if (searchQuery.isEmpty()) Text("Search in file...", color = MaterialTheme.colorScheme.onSurfaceVariant); innerTextField() } })
-                    else Text(text = if (isEditMode) "Edit: $fileName" else fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = {
-                    if (showSearchBar) IconButton(onClick = { showSearchBar = false; viewModel.clearSearch(); focusManager.clearFocus(true) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close Search") }
-                    else if (isEditMode) IconButton(onClick = { viewModel.attemptExitEditMode() }) { Icon(Icons.Filled.Close, "Close Edit Mode") }
-                    else IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                },
-                actions = {
-                    if (showSearchBar) {
-                        if (isEditMode) IconButton(onClick = { viewModel.replaceCurrentMatch() }, enabled = totalResults > 0) { Icon(Icons.Filled.FindReplace, "Replace Current") }
-                        if (totalResults > 0) Text("${currentResultIndex + 1}/$totalResults", Modifier.align(Alignment.CenterVertically).padding(horizontal = 4.dp))
-                        IconButton(onClick = { viewModel.goToPreviousMatch() }, enabled = totalResults > 0) { Icon(Icons.Filled.KeyboardArrowUp, "Previous") }
-                        IconButton(onClick = { viewModel.goToNextMatch() }, enabled = totalResults > 0) { Icon(Icons.Filled.KeyboardArrowDown, "Next") }
-                        if (searchQuery.isNotEmpty()) IconButton(onClick = { viewModel.onSearchQueryChanged("") }) { Icon(Icons.Filled.Clear, "Clear Search Text") }
-                    } else { // Search bar is NOT visible
-                        if (isEditMode) {
-                            IconButton(onClick = { viewModel.undo() }, enabled = canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo") }
-                            IconButton(onClick = { viewModel.redo() }, enabled = canRedo) { Icon(Icons.AutoMirrored.Filled.Redo, "Redo") }
-                        }
-                        IconButton(onClick = { showSearchBar = true }) { Icon(Icons.Filled.Search, "Search") }
-                        if (isEditMode) {
-                            IconButton(onClick = { viewModel.initiateSaveAs() }) { Icon(Icons.Filled.SaveAs, "Save As") }
-                            if (isSaving) CircularProgressIndicator(Modifier.size(24.dp).padding(horizontal = 8.dp))
-                            else IconButton(onClick = { viewModel.saveChanges { viewModel.exitEditMode() } }) { Icon(Icons.Filled.Done, "Save") }
-                        } else { // Not in edit mode, not searching
-                            IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.MoreVert, "More Options") }
-                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                DropdownMenuItem(text = { Text("Edit") }, onClick = { viewModel.enterEditMode(); showMenu = false })
-                                DropdownMenuItem(
-                                    text = { Text("Summary (Basic)") },
-                                    onClick = { viewModel.generateSummary(); showSummarySheet = true; showMenu = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Summary (Detailed)") },
-                                    onClick = { viewModel.generateDetailedSummary(); showDetailedSummarySheet = true; showMenu = false }
-                                )
-                            }
-                        }
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            if (showSearchBar && isEditMode) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(value = replaceQuery, onValueChange = { viewModel.onReplaceQueryChanged(it) }, label = { Text("Replace with...") }, modifier = Modifier.weight(1f), singleLine = true)
-                        Spacer(Modifier.width(8.dp))
-                        Button(onClick = { viewModel.replaceAllMatches() }, enabled = totalResults > 0) { Text("All") }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                }
-            }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                    error != null -> Text("Error: $error", color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.Center).padding(16.dp))
-                    isEditMode -> OutlinedTextField(value = editableContent, onValueChange = { viewModel.onEditableContentChanged(it) }, modifier = Modifier.fillMaxSize().verticalScroll(editorScrollState).padding(8.dp).focusRequester(editorFocusRequester), textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline))
-                    fileContent != null -> SelectionContainer { Text(text = annotatedFileContentForReadMode, modifier = Modifier.fillMaxSize().verticalScroll(textScrollState).padding(16.dp), fontFamily = FontFamily.Monospace, fontSize = 14.sp, onTextLayout = { textLayoutResultState = it }) }
-                    else -> Text("No content loaded or file is empty.", Modifier.align(Alignment.Center).padding(16.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SummaryInfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodyLarge)
-        Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun TxtFileAnalysisScreenPreview() {
-    DataGrindsetTheme {
-        val dummyUri = "content://com.example.datagrindset.provider/dummy.txt".toUri()
-        TxtFileAnalysisScreen(navController = NavController(LocalContext.current), fileUri = dummyUri)
-    }
-}
-LocalAnalysableFile:// Potentially in a new file, e.g., data/models.kt or similar
-
-package com.example.datagrindset // Or your appropriate package
-
-import android.net.Uri // For storing the file's location
-
-// Enum to represent the processing status of a file
-enum class ProcessingStatus {
-    NONE,       // Default, no action taken
-    PENDING,    // Queued for processing or opening
-    PROCESSING, // Actively being processed or loaded
-    SUCCESS,    // Processing completed successfully, or file opened for analysis
-    FAILED,     // Processing failed, or error opening
-    UNSUPPORTED,
-    ERROR
-}
-
-// Data class to represent a file selected by the user from local storage
-data class LocalAnalyzableFile(
-    val id: String, // A unique ID for app's internal tracking (e.g., UUID, or derived from URI)
-    val uri: Uri,   // The content URI or file URI pointing to the local file
-    val name: String,
-    val size: Long, // Size in bytes
-    val dateModified: Long, // Timestamp (e.g., from File.lastModified())
-    val mimeType: String?, //  e.g., "text/csv", "application/json", etc.
-    var processingStatus: ProcessingStatus = ProcessingStatus.NONE,
-    var processingResultSummary: String? = null // Optional: a brief summary or error message after processing
-)
-CsvFileViewModelFactory:
-package com.example.datagrindset.viewmodel
-
-import android.app.Application
-import android.net.Uri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-
-class CsvFileViewModelFactory(
-    private val application: Application,
-    private val initialFileUri: Uri,
-    private val initialFileName: String
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(CsvFileViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return CsvFileViewModel(application, initialFileUri, initialFileName) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
-    }
-}
-CsvFileViewModel:
-package com.example.datagrindset.viewmodel
-
-import android.app.Application
-import android.net.Uri
-import android.os.ParcelFileDescriptor
-import android.util.Log
-import androidx.documentfile.provider.DocumentFile
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.FileInputStream
-import java.io.InputStreamReader
-
-class CsvFileViewModel(
-    application: Application,
-    private val initialFileUri: Uri,
-    private val initialFileName: String
-) : AndroidViewModel(application) {
-
-    private val _fileName = MutableStateFlow(initialFileName)
-    val fileName: StateFlow<String> = _fileName.asStateFlow()
-
-    private val _rowCount = MutableStateFlow(0)
-    val rowCount: StateFlow<Int> = _rowCount.asStateFlow()
-
-    private val _columnCount = MutableStateFlow(0)
-    val columnCount: StateFlow<Int> = _columnCount.asStateFlow()
-
-    private val _headers = MutableStateFlow<List<String>>(emptyList())
-    val headers: StateFlow<List<String>> = _headers.asStateFlow()
-
-    private val _previewData = MutableStateFlow<List<List<String>>>(emptyList())
-    val previewData: StateFlow<List<List<String>>> = _previewData.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-
-    companion object {
-        private const val TAG = "CsvFileViewModel"
-        private const val PREVIEW_ROW_LIMIT = 20
-    }
-
-    init {
-        Log.i(TAG, "--- CsvFileViewModel INIT ---")
-        Log.i(TAG, "Received URI: $initialFileUri (toString: ${initialFileUri.toString()})")
-        Log.i(TAG, "Received FileName: $initialFileName")
-        loadCsvFile()
-    }
-
-    private fun parseCsvLine(line: String): List<String> {
-        val fields = mutableListOf<String>()
-        val buffer = StringBuilder()
-        var inQuotes = false
-        var i = 0
-        while (i < line.length) {
-            val char = line[i]
-            when {
-                char == '"' -> {
-                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
-                        buffer.append('"')
-                        i++
-                    } else {
-                        inQuotes = !inQuotes
-                    }
-                }
-                char == ',' && !inQuotes -> {
-                    fields.add(buffer.toString().trim())
-                    buffer.clear()
-                }
-                else -> {
-                    buffer.append(char)
-                }
-            }
-            i++
-        }
-        fields.add(buffer.toString().trim()) // Add the last field
-        return fields
-    }
-
-    fun loadCsvFile() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
-            Log.i(TAG, "--- loadCsvFile ---")
-            Log.i(TAG, "Using URI: $initialFileUri for loading.")
-            Log.i(TAG, "Current Filename for error messages: $initialFileName")
-
-            val context = getApplication<Application>()
-            var pfd: ParcelFileDescriptor? = null
-            try {
-                withContext(Dispatchers.IO) {
-                    // SAF Fix: Use DocumentFile to resolve and open the file URI
-                    val docFile = DocumentFile.fromSingleUri(context, initialFileUri)
-                        ?: DocumentFile.fromTreeUri(context, initialFileUri)
-                    if (docFile == null || !docFile.canRead()) {
-                        Log.e(TAG, "DocumentFile is null or not readable for URI: $initialFileUri")
-                        withContext(Dispatchers.Main) {
-                            _error.value = "Cannot access file: $initialFileName (DocumentFile null or not readable)"
-                        }
-                        return@withContext
-                    }
-                    pfd = context.contentResolver.openFileDescriptor(docFile.uri, "r")
-                    if (pfd == null) {
-                        Log.e(TAG, "ParcelFileDescriptor is NULL for URI: ${docFile.uri}")
-                        withContext(Dispatchers.Main) {
-                            _error.value = "Failed to open file descriptor for $initialFileName (PFD was null)."
-                        }
-                    } else {
-                        val safePfd = pfd
-                        Log.i(TAG, "SUCCESSFULLY opened ParcelFileDescriptor for URI: ${docFile.uri}. Size: ${safePfd!!.statSize}")
-                        FileInputStream(safePfd.fileDescriptor).use { fis ->
-                            BufferedReader(InputStreamReader(fis)).use { reader ->
-                                val allRows = mutableListOf<List<String>>()
-                                var line: String?
-                                var firstLine = true
-                                var maxCols = 0
-
-                                while (reader.readLine().also { line = it } != null) {
-                                    if (line.isNullOrBlank() && reader.ready().not()) continue // Skip blank lines unless it's the only line
-                                    val parsedFields = parseCsvLine(line!!)
-                                    if (parsedFields.isNotEmpty()) {
-                                        if (firstLine) {
-                                            withContext(Dispatchers.Main) { _headers.value = parsedFields }
-                                            firstLine = false
-                                        }
-                                        allRows.add(parsedFields)
-                                        if (parsedFields.size > maxCols) {
-                                            maxCols = parsedFields.size
-                                        }
-                                    }
-                                }
-
-                                withContext(Dispatchers.Main) {
-                                    if (_headers.value.isNotEmpty()) {
-                                        _previewData.value = allRows.drop(1).take(PREVIEW_ROW_LIMIT)
-                                        _rowCount.value = allRows.size
-                                        _columnCount.value = _headers.value.size
-                                    } else if (allRows.isNotEmpty()) {
-                                        _previewData.value = allRows.take(PREVIEW_ROW_LIMIT)
-                                        _rowCount.value = allRows.size
-                                        _columnCount.value = maxCols
-                                        _headers.value = List(maxCols) { index -> "Col ${index + 1}" }
-                                    } else {
-                                        _rowCount.value = 0
-                                        _columnCount.value = 0
-                                    }
-                                }
-                                Log.i(TAG, "CSV content loaded. Rows: ${allRows.size}, MaxCols: $maxCols")
-                            }
-                        }
-                    }
-                }
-            } catch (e: SecurityException) {
-                Log.e(TAG, "SecurityException in loadCsvFile for $initialFileUri: ${e.message}", e)
-                _error.value = "Permission Denied: $initialFileName. (Details: ${e.message})"
-            } catch (e: Exception) {
-                Log.e(TAG, "Generic Exception in loadCsvFile for $initialFileUri: ${e.message}", e)
-                _error.value = "Error loading $initialFileName: ${e.localizedMessage}"
-            } finally {
-                try {
-                    pfd?.close()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error closing PFD: ${e.message}", e)
-                }
-                _isLoading.value = false
-                Log.i(TAG, "--- loadCsvFile finished --- Error: ${_error.value}")
-            }
-        }
-    }
-
-    fun clearError() {
-        _error.value = null
-    }
-}
-CsvFileAnalysisScreen:
-package com.example.datagrindset.ui
-
-import android.app.Application
-import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import com.example.datagrindset.ui.theme.DataGrindsetTheme
-import com.example.datagrindset.viewmodel.CsvFileViewModel
-import com.example.datagrindset.viewmodel.CsvFileViewModelFactory
-import kotlinx.coroutines.flow.MutableStateFlow
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CsvFileAnalysisScreen(
-    navController: NavController,
-    fileUri: Uri, // Kept for reference, ViewModel is primary source
-    viewModel: CsvFileViewModel // Passed in
-) {
-    val fileName by viewModel.fileName.collectAsState()
-    val rowCount by viewModel.rowCount.collectAsState()
-    val columnCount by viewModel.columnCount.collectAsState()
-    val headers by viewModel.headers.collectAsState()
-    val previewData by viewModel.previewData.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(error) {
-        error?.let {
-            snackbarHostState.showSnackbar(
-                message = it,
-                duration = SnackbarDuration.Long
-            )
-            viewModel.clearError() // Optional: clear error after showing
-        }
-    }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text(fileName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-                // Add actions here if needed (e.g., refresh, share)
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (error != null && headers.isEmpty() && previewData.isEmpty()) { // Show error prominently if loading failed
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Error: $error",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            } else {
-                // File Info Section
-                Text("File Information", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                InfoRow(label = "Name:", value = fileName)
-                InfoRow(label = "Total Rows (incl. header if present):", value = rowCount.toString())
-                InfoRow(label = "Columns:", value = columnCount.toString())
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Data Table Section
-                if (headers.isNotEmpty() || previewData.isNotEmpty()) {
-                    Text("Data Preview", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                    Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                            if (headers.isNotEmpty()) {
-                                item {
-                                    Row(Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
-                                        headers.forEach { header ->
-                                            TableCell(text = header, isHeader = true)
-                                        }
-                                    }
-                                    HorizontalDivider()
-                                }
-                            }
-                            itemsIndexed(previewData) { index, rowData ->
-                                Row {
-                                    // Ensure rowData matches header size or pad if necessary
-                                    val displayRow = rowData.take(headers.size).toMutableList()
-                                    while (displayRow.size < headers.size) {
-                                        displayRow.add("") // Pad with empty strings if row is shorter
-                                    }
-                                    displayRow.forEach { cellData ->
-                                        TableCell(text = cellData)
-                                    }
-                                }
-                                if (index < previewData.size - 1) {
-                                    HorizontalDivider()
-                                }
-                            }
-                        }
-                    }
-                } else if (!isLoading) { // Only show if not loading and no data/headers
-                    Text(
-                        "No data or headers to display. The file might be empty or not a valid CSV.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(0.4f))
-        Text(text = value, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-@Composable
-fun TableCell(text: String, isHeader: Boolean = false, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = if (isHeader) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
-        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-        modifier = modifier
-            .defaultMinSize(minWidth = 100.dp) // Give cells a minimum width
-            .padding(horizontal = 8.dp, vertical = 12.dp),
-        maxLines = 1, // Prevent text wrapping for simplicity in table view
-        overflow = TextOverflow.Ellipsis
-    )
-}
-
-
-@Preview(showBackground = true)
-@Composable
-fun CsvFileAnalysisScreenPreview() {
-    DataGrindsetTheme {
-        val dummyUri = "content://com.example.datagrindset.provider/dummy.csv".toUri()
-        val context = LocalContext.current
-        val dummyViewModel = CsvFileViewModel(
-            application = context.applicationContext as Application,
-            initialFileUri = dummyUri,
-            initialFileName = "dummy.csv"
-        )
-        LaunchedEffect(Unit) {
-            (dummyViewModel.headers as MutableStateFlow).value = listOf("ID", "Name", "Value")
-            (dummyViewModel.previewData as MutableStateFlow).value = listOf(
-                listOf("1", "Alice", "100"),
-                listOf("2", "Bob", "200")
-            )
-            (dummyViewModel.rowCount as MutableStateFlow).value = 3
-            (dummyViewModel.columnCount as MutableStateFlow).value = 3
-        }
-
-        CsvFileAnalysisScreen(
-            navController = NavController(context),
-            fileUri = dummyUri,
-            viewModel = dummyViewModel
-        )
-    }
-}
-FileManagerScreeen:
-package com.example.datagrindset
-
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.*
-import androidx.compose.runtime.collectAsState // Ensure this is imported
-import androidx.compose.material.CircularProgressIndicator // For loading indicator
-import androidx.compose.ui.Alignment // For centering loader
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import com.example.datagrindset.viewmodel.FileManagerViewModel
-
-
-@Composable
-fun FileManagerScreen(
-    viewModel: FileManagerViewModel,
-    onPickFile: () -> Unit
-) {
-    val files by viewModel.files.collectAsState()
-    val isUploading by viewModel.isUploading.collectAsState()
-    val isLoadingFile by viewModel.isLoadingFile.collectAsState() // Collect loading state for file open
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    // Collect snackbar messages (if not handled in MainActivity)
-    // This is a more common pattern if FileManagerScreen owns the SnackbarHost
-    LaunchedEffect(Unit) {
-        viewModel.snackbarMessage.collect { message ->
-            snackbarHostState.showSnackbar(message)
-        }
-    }
-
-
-    Box(modifier = Modifier.fillMaxSize()) { // Use Box to overlay loader
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Text("DataGrindSet — файловый менеджер", style = MaterialTheme.typography.h5)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = onPickFile,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isUploading && !isLoadingFile // Disable if uploading or opening file
-            ) {
-                Text("Загрузить файл в облако")
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (isUploading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(files.size) { i ->
-                    val file = files[i]
-                    FileItem(
-                        file,
-                        onOpen = { if (!isLoadingFile) viewModel.openFile(file) }, // Prevent multiple clicks
-                        onDelete = { viewModel.deleteFile(file) },
-                        isEnabled = !isLoadingFile // Disable item interaction while opening another file
-                    )
-                }
-            }
-            SnackbarHost(hostState = snackbarHostState) // Ensure this is inside the Column or Box correctly
-        }
-
-        if (isLoadingFile) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-        }
-    }
-}
-
-@Composable
-fun FileItem(
-    file: CloudFile,
-    onOpen: () -> Unit,
-    onDelete: () -> Unit,
-    isEnabled: Boolean = true // Add isEnabled parameter
-) {
-    Card(
-        elevation = 2.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable(enabled = isEnabled, onClick = onOpen) // Apply isEnabled to clickable
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                file.name,
-                modifier = Modifier.weight(1f)
-                // Clickable is now on the Card
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            IconButton(onClick = onDelete, enabled = isEnabled) { // Apply isEnabled
-                Icon(Icons.Default.Delete, contentDescription = "Удалить")
-            }
-        }
-    }
-}
-MainActivity:
-package com.example.datagrindset
-
-import android.content.Intent
-import android.net.Uri
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
-import androidx.compose.material.Text
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHost
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import com.example.datagrindset.ui.LocalFileManagerScreen
-import com.example.datagrindset.ui.theme.DataGrindsetTheme
-import com.example.datagrindset.viewmodel.LocalFileManagerViewModel
-import com.example.datagrindset.viewmodel.LocalFileManagerViewModelFactory
-
-import com.example.datagrindset.ui.CsvFileAnalysisScreen // Import new screen
-import com.example.datagrindset.viewmodel.CsvFileViewModelFactory // Import new factory
-
-import com.example.datagrindset.ui.TxtFileAnalysisScreen
-import androidx.core.net.toUri
-import androidx.media3.common.util.Log
-
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
-import com.example.datagrindset.ui.SettingsScreen
-import com.example.datagrindset.viewmodel.CsvFileViewModel
-class MainActivity : ComponentActivity() {
-
-    private val viewModel: LocalFileManagerViewModel by viewModels {
-        LocalFileManagerViewModelFactory(application)
-    }
-
-    // Launcher for selecting a directory tree
-    private val openDirectoryLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let {
-            // Persist read permissions. This is crucial for long-term access.
-            try {
-                val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION // Optional: if you ever need to write
-                contentResolver.takePersistableUriPermission(it, takeFlags)
-                viewModel.setRootTreeUri(it)
-            } catch (e: SecurityException) {
-                // Handle the case where permissions could not be taken.
-                // The ViewModel will also handle setting its state appropriately if this fails.
-                viewModel.setRootTreeUri(it) // Let ViewModel try and handle error display if needed
-                // You might want to show a toast to the user here indicating permission failure.
-                // e.g., Toast.makeText(this, "Failed to get folder permissions", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        setContent {
-            DataGrindsetTheme {
-                val navController = rememberNavController() // For Jetpack Compose Navigation
-
-                // Collecting all necessary states from the ViewModel
-                val rootTreeUri by viewModel.rootTreeUri.collectAsStateWithLifecycle()
-                val canNavigateUp by viewModel.canNavigateUp.collectAsStateWithLifecycle()
-                val currentPathDisplay by viewModel.currentPathDisplay.collectAsStateWithLifecycle()
-                val directoryEntries by viewModel.directoryEntries.collectAsStateWithLifecycle()
-                val fileProcessingStatusMap by viewModel.fileProcessingStatusMap.collectAsStateWithLifecycle()
-                val searchText by viewModel.searchText.collectAsStateWithLifecycle()
-                val sortOption by viewModel.sortOption.collectAsStateWithLifecycle()
-                val navigateToAnalysisTarget by viewModel.navigateToAnalysisTarget.collectAsStateWithLifecycle()
-
-                val suggestExternalAppForFile by viewModel.suggestExternalAppForFile.collectAsState()
-                // Navigation Host for managing different screens
-                NavHost(navController = navController, startDestination = "fileManager") {
-                    composable("fileManager") {
-                        LocalFileManagerScreen(
-                            rootUriSelected = rootTreeUri != null,
-                            canNavigateUp = canNavigateUp,
-                            currentPath = currentPathDisplay,
-                            entries = directoryEntries,
-                            fileProcessingStatusMap = fileProcessingStatusMap,
-                            searchText = searchText,
-                            onSearchTextChanged = viewModel::onSearchTextChanged,
-                            currentSortOption = sortOption,
-
-                            onSortOptionSelected = viewModel::onSortOptionSelected,
-                            onSelectRootDirectoryClicked = {
-                                openDirectoryLauncher.launch(null) // Initial URI can be null
-                            },
-                            onNavigateToFolder = viewModel::navigateTo,
-                            onNavigateUp = viewModel::navigateUp,
-                            onPrepareFileForAnalysis = viewModel::prepareFileForAnalysis,
-                            onDeleteEntry = viewModel::deleteEntry,
-                            navigateToAnalysisTarget = navigateToAnalysisTarget,
-                            suggestExternalAppForFile = suggestExternalAppForFile, // Pass the new state
-                            onDidAttemptToOpenWithExternalApp = viewModel::didAttemptToOpenWithExternalApp,
-                            onDidNavigateToAnalysisScreen = viewModel::didNavigateToAnalysisScreen,
-                            navController = navController // Pass NavController for navigation actions
-
-                        )
-                    }
-
-                    composable("txtAnalysisScreen/{fileUri}") { backStackEntry ->
-                        val encodedFileUriString = backStackEntry.arguments?.getString("fileUri")
-                        if (encodedFileUriString != null) {
-                            TxtFileAnalysisScreen(navController = navController, fileUri = fileUri)
-                        } else {
-                            // Handle error: fileUri not provided. Maybe navigate back or show error.
-                            Text("Error: TXT file URI not provided in navigation arguments.")
-                        }
-                    }
-                    composable(
-                        "csvAnalysisScreen/{fileUri}/{fileName}",
-                        arguments = listOf(
-                            navArgument("fileUri") { type = NavType.StringType },
-                            navArgument("fileName") { type = NavType.StringType }
-                        )
-                    ) { backStackEntry ->
-                        val fileUriString = backStackEntry.arguments?.getString("fileUri") ?: return@composable
-                        val fileName = backStackEntry.arguments?.getString("fileName") ?: return@composable
-                        val fileUri = URLDecoder.decode(fileUriString, "UTF-8").toUri()
-                        val csvViewModel: CsvFileViewModel = viewModel(
-                            factory = CsvFileViewModelFactory(application, fileUri, fileName)
-                        )
-                        CsvFileAnalysisScreen(navController, fileUri, csvViewModel)
-                    }
-                    composable("settings") { // New route for Settings
-                        SettingsScreen(navController = navController)
-                    }
-                }
-            }
-        }
-    }
-}
-FileItem:
-
-package com.example.datagrindset.ui // Or your appropriate package
-
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.* // For various icons
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import com.example.datagrindset.LocalAnalyzableFile
-import com.example.datagrindset.ProcessingStatus
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-@Composable
-fun LocalFileItem(
-    file: LocalAnalyzableFile,
-    onProcess: (LocalAnalyzableFile) -> Unit,
-    onDelete: (LocalAnalyzableFile) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // File Icon
-            Icon(
-                imageVector = getIconForMimeType(file.mimeType),
-                contentDescription = "File type",
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // File Details Column
-            Column(modifier = Modifier.weight(1f)) {
-                Text(file.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Size: ${formatFileSize(file.size)}", style = MaterialTheme.typography.bodySmall)
-                    Text("Modified: ${formatDate(file.dateModified)}", style = MaterialTheme.typography.bodySmall)
-                }
-                if (file.processingStatus != ProcessingStatus.NONE || file.processingResultSummary != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ProcessingStatusIndicator(file.processingStatus)
-                        file.processingResultSummary?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontStyle = FontStyle.Italic,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                IconButton(onClick = { onProcess(file) }) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "Process File", tint = MaterialTheme.colorScheme.secondary) // Or Icons.Filled.Settings for gears
-                }
-                IconButton(onClick = { onDelete(file) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete File", tint = MaterialTheme.colorScheme.error)
-                }
-            }
-        }
-    }
-}
-Let`s firstly work with localisation.
+Let`s get back to the Direct access of files. This method we are right now is bad. Not convinient and it doesn`t work. Previous one worked at one point. And yes, here are logs:---------------------------- PROCESS STARTED (27420) for package com.example.datagrindset ----------------------------
+2025-05-27 20:11:49.045  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:11:49.481 27420-27420 ziparchive              com.example.datagrindset             W  Unable to open '/data/data/com.example.datagrindset/code_cache/.overlay/base.apk/classes4.dm': No such file or directory
+2025-05-27 20:11:49.483 27420-27420 ziparchive              com.example.datagrindset             W  Unable to open '/data/data/com.example.datagrindset/code_cache/.overlay/base.apk/classes8.dm': No such file or directory
+2025-05-27 20:11:49.486 27420-27420 ziparchive              com.example.datagrindset             W  Unable to open '/data/data/com.example.datagrindset/code_cache/.overlay/base.apk/classes6.dm': No such file or directory
+2025-05-27 20:11:49.493 27420-27420 le.datagrindse          com.example.datagrindset             W  ClassLoaderContext classpath size mismatch. expected=0, found=3 (PCL[] | PCL[/data/data/com.example.datagrindset/code_cache/.overlay/base.apk/classes4.dex*3298008857:/data/data/com.example.datagrindset/code_cache/.overlay/base.apk/classes8.dex*107692727:/data/data/com.example.datagrindset/code_cache/.overlay/base.apk/classes6.dex*3945008701])
+2025-05-27 20:11:49.512 27420-27420 nativeloader            com.example.datagrindset             D  Configuring clns-4 for other apk /data/app/~~OEeuENqcXOUpD23VILmcPA==/com.example.datagrindset-OKeDZvXqGOimUAnV4_esyw==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~OEeuENqcXOUpD23VILmcPA==/com.example.datagrindset-OKeDZvXqGOimUAnV4_esyw==/lib/arm64:/data/app/~~OEeuENqcXOUpD23VILmcPA==/com.example.datagrindset-OKeDZvXqGOimUAnV4_esyw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.example.datagrindset
+2025-05-27 20:11:49.529 27420-27420 GraphicsEnvironment     com.example.datagrindset             V  ANGLE Developer option for 'com.example.datagrindset' set to: 'default'
+2025-05-27 20:11:49.529 27420-27420 GraphicsEnvironment     com.example.datagrindset             V  Updatable production driver is not supported on the device.
+2025-05-27 20:11:49.533 27420-27420 ForceDarkHelperStubImpl com.example.datagrindset             I  initialize for com.example.datagrindset , ForceDarkOrigin
+2025-05-27 20:11:49.536 27420-27420 nativeloader            com.example.datagrindset             D  Load libforcedarkimpl.so using system ns (caller=/system/framework/miui-framework.jar): ok
+2025-05-27 20:11:49.536 27420-27420 OpenGLRenderer          com.example.datagrindset             D  JNI_OnLoad success
+2025-05-27 20:11:49.536 27420-27420 MiuiForceDarkConfig     com.example.datagrindset             I  setConfig density:2.750000, mainRule:0, secondaryRule:0, tertiaryRule:0
+2025-05-27 20:11:49.541 27420-27420 NetworkSecurityConfig   com.example.datagrindset             D  No Network Security Config specified, using platform default
+2025-05-27 20:11:49.542 27420-27420 NetworkSecurityConfig   com.example.datagrindset             D  No Network Security Config specified, using platform default
+2025-05-27 20:11:49.578 27420-27420 FirebaseApp             com.example.datagrindset             I  Device unlocked: initializing all Firebase APIs for app [DEFAULT]
+2025-05-27 20:11:49.579 27420-27420 com.exampl...tagrindset com.example.datagrindset             W  type=1400 audit(0.0:25431): avc: denied { write } for comm=4669726562617365204261636B6772 name="tasks" dev="cgroup" ino=21 scontext=u:r:untrusted_app:s0:c184,c257,c512,c768 tcontext=u:object_r:cgroup:s0 tclass=file permissive=0 app=com.example.datagrindset
+2025-05-27 20:11:49.587 27420-27420 FirebaseInitProvider    com.example.datagrindset             I  FirebaseApp initialization successful
+2025-05-27 20:11:49.608 27420-27420 ziparchive              com.example.datagrindset             W  Unable to open '/system/framework/miui-framework.dm': No such file or directory
+2025-05-27 20:11:49.609 27420-27420 ziparchive              com.example.datagrindset             W  Unable to open '/system/framework/miui-framework.dm': No such file or directory
+2025-05-27 20:11:49.677 27420-27435 AppScoutStateMachine    com.example.datagrindset             D  27420-ScoutStateMachinecreated
+2025-05-27 20:11:49.689 27420-27420 LocaleHelper            com.example.datagrindset             D  onAttach: Attaching with persisted language: ru
+2025-05-27 20:11:49.689 27420-27420 LocaleHelper            com.example.datagrindset             D  updateResources: Applying new configuration for language: ru
+2025-05-27 20:11:49.717 27420-27420 DecorView[]             com.example.datagrindset             D  getWindowModeFromSystem  windowmode is 1
+2025-05-27 20:11:49.728 27420-27420 ActivityJuiImpl         com.example.datagrindset             D  startSkipAd :package=com.example.datagrindset;getClassName=com.example.datagrindset.MainActivity;getShortClassName=.MainActivity
+2025-05-27 20:11:49.752 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor looperActivity : package=com.example.datagrindset/.MainActivity time=94ms latency=1228ms running=0ms  procState=-1  historyMsgCount=3 (msgIndex=1 wall=353ms seq=1 late=25ms h=android.app.ActivityThread$H w=162) (msgIndex=3 wall=871ms seq=3 late=375ms h=android.app.ActivityThread$H w=110)
+2025-05-27 20:11:49.753 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor looperActivity : package=com.example.datagrindset/.MainActivity time=0ms latency=1321ms running=0ms  procState=-1  historyMsgCount=4 (msgIndex=1 wall=353ms seq=1 late=25ms h=android.app.ActivityThread$H w=162) (msgIndex=3 wall=871ms seq=3 late=375ms h=android.app.ActivityThread$H w=110) (msgIndex=4 wall=94ms seq=4 late=1228ms h=android.app.ActivityThread$H w=159)
+2025-05-27 20:11:49.753 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor looperActivity : package=com.example.datagrindset/.MainActivity time=1ms latency=1320ms running=0ms  procState=-1  historyMsgCount=6 (msgIndex=1 wall=353ms seq=1 late=25ms h=android.app.ActivityThread$H w=162) (msgIndex=3 wall=871ms seq=3 late=375ms h=android.app.ActivityThread$H w=110) (msgIndex=4 wall=94ms seq=4 late=1228ms h=android.app.ActivityThread$H w=159)
+2025-05-27 20:11:49.757 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor looperActivity : package=com.example.datagrindset/.MainActivity time=4ms latency=1321ms running=0ms  procState=-1  historyMsgCount=7 (msgIndex=1 wall=353ms seq=1 late=25ms h=android.app.ActivityThread$H w=162) (msgIndex=3 wall=871ms seq=3 late=375ms h=android.app.ActivityThread$H w=110) (msgIndex=4 wall=94ms seq=4 late=1228ms h=android.app.ActivityThread$H w=159)
+2025-05-27 20:11:49.765 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor looperActivity : package=com.example.datagrindset/.MainActivity time=5ms latency=822ms running=0ms  procState=-1  historyMsgCount=7 (msgIndex=1 wall=871ms seq=3 late=375ms h=android.app.ActivityThread$H w=110) (msgIndex=2 wall=94ms seq=4 late=1228ms h=android.app.ActivityThread$H w=159)
+2025-05-27 20:11:49.767 27420-27420 ActivityJuiImpl         com.example.datagrindset             D  startSkipAd :package=com.example.datagrindset;getClassName=com.example.datagrindset.MainActivity;getShortClassName=.MainActivity
+2025-05-27 20:11:50.010 27420-27464 AdrenoGLES-0            com.example.datagrindset             I  QUALCOMM build                   : ed31248c9a, Iadf2db9558
+                                                                                                    Build Date                       : 03/23/22
+                                                                                                    OpenGL ES Shader Compiler Version: EV031.36.08.05
+                                                                                                    Local Branch                     : 
+                                                                                                    Remote Branch                    : 
+                                                                                                    Remote Branch                    : 
+                                                                                                    Reconstruct Branch               : 
+2025-05-27 20:11:50.010 27420-27464 AdrenoGLES-0            com.example.datagrindset             I  Build Config                     : S P 12.1.1 AArch64
+2025-05-27 20:11:50.010 27420-27464 AdrenoGLES-0            com.example.datagrindset             I  Driver Path                      : /vendor/lib64/egl/libGLESv2_adreno.so
+2025-05-27 20:11:50.010 27420-27464 AdrenoGLES-0            com.example.datagrindset             I  Driver Version                   : 0615.0
+2025-05-27 20:11:50.024 27420-27464 AdrenoGLES-0            com.example.datagrindset             I  PFP: 0x01730142, ME: 0x00000000
+2025-05-27 20:11:50.115 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor doFrame : time=346ms vsyncFrame=0 latency=3ms procState=-1 historyMsgCount=4
+2025-05-27 20:11:50.175 27420-27420 ImeFocusController      com.example.datagrindset             V  onWindowFocus: DecorView@f3cea9a[MainActivity] softInputMode=STATE_UNSPECIFIED|ADJUST_PAN|IS_FORWARD_NAVIGATION
+2025-05-27 20:11:50.175 27420-27420 ImeFocusController      com.example.datagrindset             V  Restarting due to isRestartOnNextWindowFocus as true
+2025-05-27 20:11:50.175 27420-27420 ImeFocusController      com.example.datagrindset             D  onViewFocusChanged, view=DecorView@f3cea9a[MainActivity], mServedView=null
+2025-05-27 20:11:50.175 27420-27420 ImeFocusController      com.example.datagrindset             V  checkFocus: view=null next=DecorView@f3cea9a[MainActivity] force=true package=<none>
+2025-05-27 20:11:50.175 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true reason=WINDOW_FOCUS_GAIN
+2025-05-27 20:11:50.175 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: tba=android.view.inputmethod.EditorInfo@26cf3a8 ic=null
+2025-05-27 20:11:50.176 27420-27420 InputMethodManager      com.example.datagrindset             V  START INPUT: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true ic=null tba=android.view.inputmethod.EditorInfo@26cf3a8 startInputFlags=VIEW_HAS_FOCUS|INITIAL_CONNECTION
+2025-05-27 20:11:50.177 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: Bind result=InputBindResult{result=SUCCESS_WAITING_IME_SESSION method=null id=com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME sequence=4183 isInputMethodSuppressingSpellChecker=false}
+2025-05-27 20:11:50.201 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE true, was false
+2025-05-27 20:11:50.203 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_BIND 4183,com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+2025-05-27 20:11:50.204 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true reason=BOUND_TO_IMMS
+2025-05-27 20:11:50.204 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: tba=android.view.inputmethod.EditorInfo@14632f2 ic=null
+2025-05-27 20:11:50.204 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: finished by someone else. view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true servedView=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true mServedConnecting=false
+2025-05-27 20:11:51.253 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor doFrame : time=435ms vsyncFrame=0 latency=1ms procState=-1
+2025-05-27 20:11:51.256 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor doFrame : time=1ms vsyncFrame=0 latency=388ms procState=-1 historyMsgCount=2 (msgIndex=1 wall=435ms seq=74 late=1ms h=android.view.Choreographer$FrameHandler c=android.view.Choreographer$FrameDisplayEventReceiver)
+2025-05-27 20:11:53.085 27420-27420 MirrorManager           com.example.datagrindset             W  this model don't Support
+2025-05-27 20:11:53.142 27420-27420 LFMViewModel            com.example.datagrindset             D  Preparing file for analysis: customers-100000.csv, URI: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTelegram/document/primary%3ADownload%2FTelegram%2Fcustomers-100000.csv
+2025-05-27 20:11:53.143 27420-27420 LFMViewModel            com.example.datagrindset             D  Supported file type for analysis (CSV). Emitting requestOpenFileAnalysis.
+2025-05-27 20:11:53.147 27420-27420 MainActivity            com.example.datagrindset             D  Launching ACTION_OPEN_DOCUMENT for customers-100000.csv (Original URI: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTelegram/document/primary%3ADownload%2FTelegram%2Fcustomers-100000.csv) with MIME types: text/csv, application/csv
+2025-05-27 20:11:53.370  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:11:53.453 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE false, was true
+2025-05-27 20:11:53.453 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_UNBIND 4183 reason=SWITCH_CLIENT
+2025-05-27 20:11:53.453 27420-27420 InputMethodManager      com.example.datagrindset             V  Clearing binding!
+2025-05-27 20:11:53.920 27420-27464 OpenGLRenderer          com.example.datagrindset             D  endAllActiveAnimators on 0xb400007c4b99c700 (UnprojectedRipple) with handle 0xb400007b5b99e400
+2025-05-27 20:11:55.749 27420-27578 ProfileInstaller        com.example.datagrindset             D  Installing profile for com.example.datagrindset
+2025-05-27 20:12:08.672 27420-27427 System                  com.example.datagrindset             W  A resource failed to call close. 
+2025-05-27 20:12:25.897 27420-27434 AppScoutStateMachine    com.example.datagrindset             D  27420-ScoutStateMachinecreated
+2025-05-27 20:12:25.915 27420-27420 MainActivity            com.example.datagrindset             W  ACTION_OPEN_DOCUMENT was cancelled or returned null URI.
+2025-05-27 20:12:25.916 27420-27420 Compatibil...geReporter com.example.datagrindset             D  Compat change id reported: 147798919; UID 10440; state: ENABLED
+2025-05-27 20:12:25.927  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:25.928  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:25.928  4053-4053  ResourcesManager        pid-4053                             E  failed to add asset path '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk'
+                                                                                                    java.io.IOException: Failed to load asset path /data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk
+                                                                                                    	at android.content.res.ApkAssets.nativeLoad(Native Method)
+                                                                                                    	at android.content.res.ApkAssets.<init>(ApkAssets.java:295)
+                                                                                                    	at android.content.res.ApkAssets.loadFromPath(ApkAssets.java:144)
+                                                                                                    	at android.app.ResourcesManager.loadApkAssets(ResourcesManager.java:463)
+                                                                                                    	at android.app.ResourcesManager.access$000(ResourcesManager.java:76)
+                                                                                                    	at android.app.ResourcesManager$ApkAssetsSupplier.load(ResourcesManager.java:177)
+                                                                                                    	at android.app.ResourcesManager.createAssetManager(ResourcesManager.java:544)
+                                                                                                    	at android.app.ResourcesManager.createResourcesImpl(ResourcesManager.java:626)
+                                                                                                    	at android.app.ResourcesManager.findOrCreateResourcesImplForKeyLocked(ResourcesManager.java:681)
+                                                                                                    	at android.app.ResourcesManager.createResources(ResourcesManager.java:1037)
+                                                                                                    	at android.app.ResourcesManager.getResources(ResourcesManager.java:1140)
+                                                                                                    	at android.app.ActivityThread.getTopLevelResources(ActivityThread.java:2426)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2226)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2212)
+                                                                                                    	at android.app.ApplicationPackageManager.getDrawable(ApplicationPackageManager.java:1973)
+                                                                                                    	at miui.content.res.IconCustomizer.getCustomizedNormalIcon(IconCustomizer.java:831)
+                                                                                                    	at miui.content.res.IconCustomizer.getIcon(IconCustomizer.java:807)
+                                                                                                    	at android.app.MiuiThemeHelper.getDrawable(MiuiThemeHelper.java:101)
+                                                                                                    	at android.content.res.IMiuiThemeHelperImpl.getDrawable(IMiuiThemeHelperImpl.java:39)
+                                                                                                    	at android.content.res.ThemeManagerStub.getDrawable(ThemeManagerStub.java:159)
+                                                                                                    	at android.app.ApplicationPackageManager.loadUnbadgedItemIcon(ApplicationPackageManager.java:3513)
+                                                                                                    	at android.content.pm.PackageItemInfo.loadUnbadgedIcon(PackageItemInfo.java:290)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.getBadgedIcon(SystemUIToast.java:284)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.inflateToastView(SystemUIToast.java:198)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:90)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:77)
+                                                                                                    	at com.android.systemui.toast.ToastFactory.createToast(ToastFactory.java:78)
+                                                                                                    	at com.android.systemui.toast.ToastUI.lambda$showToast$0(ToastUI.java:124)
+                                                                                                    	at com.android.systemui.toast.ToastUI.$r8$lambda$w_gPCh3F8Xxn1jN4lkQZoUci71c(Unknown Source:0)
+                                                                                                    	at com.android.systemui.toast.ToastUI$$ExternalSyntheticLambda0.run(Unknown Source:16)
+                                                                                                    	at com.android.systemui.toast.ToastUI.showToast(ToastUI.java:158)
+                                                                                                    	at com.android.systemui.statusbar.CommandQueue$H.handleMessage(CommandQueue.java:1471)
+                                                                                                    	at android.os.Handler.dispatchMessage(Handler.java:106)
+                                                                                                    	at android.os.Looper.loopOnce(Looper.java:210)
+                                                                                                    	at android.os.Looper.loop(Looper.java:299)
+                                                                                                    	at android.app.ActivityThread.main(ActivityThread.java:8122)
+                                                                                                    	at java.lang.reflect.Method.invoke(Native Method)
+                                                                                                    	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:565)
+                                                                                                    	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1045)
+2025-05-27 20:12:25.928  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:25.928 27420-27420 ActivityJuiImpl         com.example.datagrindset             D  startSkipAd :package=com.example.datagrindset;getClassName=com.example.datagrindset.MainActivity;getShortClassName=.MainActivity
+2025-05-27 20:12:25.929  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:25.929  4053-4053  ResourcesManager        pid-4053                             E  failed to add asset path '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk'
+                                                                                                    java.io.IOException: Failed to load asset path /data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk
+                                                                                                    	at android.content.res.ApkAssets.nativeLoad(Native Method)
+                                                                                                    	at android.content.res.ApkAssets.<init>(ApkAssets.java:295)
+                                                                                                    	at android.content.res.ApkAssets.loadFromPath(ApkAssets.java:144)
+                                                                                                    	at android.app.ResourcesManager.loadApkAssets(ResourcesManager.java:463)
+                                                                                                    	at android.app.ResourcesManager.access$000(ResourcesManager.java:76)
+                                                                                                    	at android.app.ResourcesManager$ApkAssetsSupplier.load(ResourcesManager.java:177)
+                                                                                                    	at android.app.ResourcesManager.createAssetManager(ResourcesManager.java:544)
+                                                                                                    	at android.app.ResourcesManager.createResourcesImpl(ResourcesManager.java:626)
+                                                                                                    	at android.app.ResourcesManager.findOrCreateResourcesImplForKeyLocked(ResourcesManager.java:681)
+                                                                                                    	at android.app.ResourcesManager.createResources(ResourcesManager.java:1037)
+                                                                                                    	at android.app.ResourcesManager.getResources(ResourcesManager.java:1140)
+                                                                                                    	at android.app.ActivityThread.getTopLevelResources(ActivityThread.java:2426)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2226)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2212)
+                                                                                                    	at android.app.ApplicationPackageManager.getDrawable(ApplicationPackageManager.java:1973)
+                                                                                                    	at android.app.ApplicationPackageManager.loadUnbadgedItemIcon(ApplicationPackageManager.java:3528)
+                                                                                                    	at android.content.pm.PackageItemInfo.loadUnbadgedIcon(PackageItemInfo.java:290)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.getBadgedIcon(SystemUIToast.java:284)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.inflateToastView(SystemUIToast.java:198)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:90)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:77)
+                                                                                                    	at com.android.systemui.toast.ToastFactory.createToast(ToastFactory.java:78)
+                                                                                                    	at com.android.systemui.toast.ToastUI.lambda$showToast$0(ToastUI.java:124)
+                                                                                                    	at com.android.systemui.toast.ToastUI.$r8$lambda$w_gPCh3F8Xxn1jN4lkQZoUci71c(Unknown Source:0)
+                                                                                                    	at com.android.systemui.toast.ToastUI$$ExternalSyntheticLambda0.run(Unknown Source:16)
+                                                                                                    	at com.android.systemui.toast.ToastUI.showToast(ToastUI.java:158)
+                                                                                                    	at com.android.systemui.statusbar.CommandQueue$H.handleMessage(CommandQueue.java:1471)
+                                                                                                    	at android.os.Handler.dispatchMessage(Handler.java:106)
+                                                                                                    	at android.os.Looper.loopOnce(Looper.java:210)
+                                                                                                    	at android.os.Looper.loop(Looper.java:299)
+                                                                                                    	at android.app.ActivityThread.main(ActivityThread.java:8122)
+                                                                                                    	at java.lang.reflect.Method.invoke(Native Method)
+                                                                                                    	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:565)
+                                                                                                    	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1045)
+2025-05-27 20:12:26.002  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:12:26.041 27420-27420 ImeFocusController      com.example.datagrindset             V  onWindowFocus: DecorView@f3cea9a[MainActivity] softInputMode=STATE_UNSPECIFIED|ADJUST_PAN
+2025-05-27 20:12:26.041 27420-27420 ImeFocusController      com.example.datagrindset             V  Restarting due to isRestartOnNextWindowFocus as true
+2025-05-27 20:12:26.042 27420-27420 ImeFocusController      com.example.datagrindset             D  onViewFocusChanged, view=DecorView@f3cea9a[MainActivity], mServedView=DecorView@f3cea9a[MainActivity]
+2025-05-27 20:12:26.043 27420-27420 ImeFocusController      com.example.datagrindset             V  checkFocus: view=DecorView@f3cea9a[MainActivity] next=DecorView@f3cea9a[MainActivity] force=true package=com.example.datagrindset
+2025-05-27 20:12:26.044 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true reason=WINDOW_FOCUS_GAIN
+2025-05-27 20:12:26.044 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: tba=android.view.inputmethod.EditorInfo@3d66809 ic=null
+2025-05-27 20:12:26.045 27420-27420 InputMethodManager      com.example.datagrindset             V  START INPUT: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true ic=null tba=android.view.inputmethod.EditorInfo@3d66809 startInputFlags=VIEW_HAS_FOCUS|INITIAL_CONNECTION
+2025-05-27 20:12:26.047 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: Bind result=InputBindResult{result=SUCCESS_WITH_IME_SESSION method=com.android.internal.view.IInputMethodSession$Stub$Proxy@5f33a0e id=com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME sequence=4185 isInputMethodSuppressingSpellChecker=false}
+2025-05-27 20:12:26.048 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE true, was false
+2025-05-27 20:12:33.398 27420-27420 LFMViewModel            com.example.datagrindset             D  Preparing file for analysis: customers-100000.csv, URI: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTelegram/document/primary%3ADownload%2FTelegram%2Fcustomers-100000.csv
+2025-05-27 20:12:33.398 27420-27420 LFMViewModel            com.example.datagrindset             D  Supported file type for analysis (CSV). Emitting requestOpenFileAnalysis.
+2025-05-27 20:12:33.402 27420-27420 MainActivity            com.example.datagrindset             D  Launching ACTION_OPEN_DOCUMENT for customers-100000.csv (Original URI: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTelegram/document/primary%3ADownload%2FTelegram%2Fcustomers-100000.csv) with MIME types: text/csv, application/csv
+2025-05-27 20:12:33.534  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:12:33.640 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE false, was true
+2025-05-27 20:12:33.641 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_UNBIND 4185 reason=SWITCH_CLIENT
+2025-05-27 20:12:33.641 27420-27420 InputMethodManager      com.example.datagrindset             V  Clearing binding!
+2025-05-27 20:12:34.063 27420-27464 OpenGLRenderer          com.example.datagrindset             D  endAllActiveAnimators on 0xb400007c4b99c700 (UnprojectedRipple) with handle 0xb400007b5b96d7d0
+2025-05-27 20:12:44.641 27420-27420 MainActivity            com.example.datagrindset             W  ACTION_OPEN_DOCUMENT was cancelled or returned null URI.
+2025-05-27 20:12:44.644 27420-27429 AppScoutStateMachine    com.example.datagrindset             D  27420-ScoutStateMachinecreated
+2025-05-27 20:12:44.651 27420-27420 ActivityJuiImpl         com.example.datagrindset             D  startSkipAd :package=com.example.datagrindset;getClassName=com.example.datagrindset.MainActivity;getShortClassName=.MainActivity
+2025-05-27 20:12:44.654  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:44.657  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:44.658  4053-4053  ResourcesManager        pid-4053                             E  failed to add asset path '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk'
+                                                                                                    java.io.IOException: Failed to load asset path /data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk
+                                                                                                    	at android.content.res.ApkAssets.nativeLoad(Native Method)
+                                                                                                    	at android.content.res.ApkAssets.<init>(ApkAssets.java:295)
+                                                                                                    	at android.content.res.ApkAssets.loadFromPath(ApkAssets.java:144)
+                                                                                                    	at android.app.ResourcesManager.loadApkAssets(ResourcesManager.java:463)
+                                                                                                    	at android.app.ResourcesManager.access$000(ResourcesManager.java:76)
+                                                                                                    	at android.app.ResourcesManager$ApkAssetsSupplier.load(ResourcesManager.java:177)
+                                                                                                    	at android.app.ResourcesManager.createAssetManager(ResourcesManager.java:544)
+                                                                                                    	at android.app.ResourcesManager.createResourcesImpl(ResourcesManager.java:626)
+                                                                                                    	at android.app.ResourcesManager.findOrCreateResourcesImplForKeyLocked(ResourcesManager.java:681)
+                                                                                                    	at android.app.ResourcesManager.createResources(ResourcesManager.java:1037)
+                                                                                                    	at android.app.ResourcesManager.getResources(ResourcesManager.java:1140)
+                                                                                                    	at android.app.ActivityThread.getTopLevelResources(ActivityThread.java:2426)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2226)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2212)
+                                                                                                    	at android.app.ApplicationPackageManager.getDrawable(ApplicationPackageManager.java:1973)
+                                                                                                    	at miui.content.res.IconCustomizer.getCustomizedNormalIcon(IconCustomizer.java:831)
+                                                                                                    	at miui.content.res.IconCustomizer.getIcon(IconCustomizer.java:807)
+                                                                                                    	at android.app.MiuiThemeHelper.getDrawable(MiuiThemeHelper.java:101)
+                                                                                                    	at android.content.res.IMiuiThemeHelperImpl.getDrawable(IMiuiThemeHelperImpl.java:39)
+                                                                                                    	at android.content.res.ThemeManagerStub.getDrawable(ThemeManagerStub.java:159)
+                                                                                                    	at android.app.ApplicationPackageManager.loadUnbadgedItemIcon(ApplicationPackageManager.java:3513)
+                                                                                                    	at android.content.pm.PackageItemInfo.loadUnbadgedIcon(PackageItemInfo.java:290)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.getBadgedIcon(SystemUIToast.java:284)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.inflateToastView(SystemUIToast.java:198)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:90)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:77)
+                                                                                                    	at com.android.systemui.toast.ToastFactory.createToast(ToastFactory.java:78)
+                                                                                                    	at com.android.systemui.toast.ToastUI.lambda$showToast$0(ToastUI.java:124)
+                                                                                                    	at com.android.systemui.toast.ToastUI.$r8$lambda$w_gPCh3F8Xxn1jN4lkQZoUci71c(Unknown Source:0)
+                                                                                                    	at com.android.systemui.toast.ToastUI$$ExternalSyntheticLambda0.run(Unknown Source:16)
+                                                                                                    	at com.android.systemui.toast.ToastUI.showToast(ToastUI.java:158)
+                                                                                                    	at com.android.systemui.statusbar.CommandQueue$H.handleMessage(CommandQueue.java:1471)
+                                                                                                    	at android.os.Handler.dispatchMessage(Handler.java:106)
+                                                                                                    	at android.os.Looper.loopOnce(Looper.java:210)
+                                                                                                    	at android.os.Looper.loop(Looper.java:299)
+                                                                                                    	at android.app.ActivityThread.main(ActivityThread.java:8122)
+                                                                                                    	at java.lang.reflect.Method.invoke(Native Method)
+                                                                                                    	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:565)
+                                                                                                    	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1045)
+2025-05-27 20:12:44.665  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:44.671  4053-4053  ndroid.systemu          pid-4053                             E  Failed to open APK '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk': I/O error
+2025-05-27 20:12:44.672  4053-4053  ResourcesManager        pid-4053                             E  failed to add asset path '/data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk'
+                                                                                                    java.io.IOException: Failed to load asset path /data/app/~~oA41uL631EXo-j1jGHbn3Q==/com.example.datagrindset-OPYrqmUuxO4UhHRGqW97Ew==/base.apk
+                                                                                                    	at android.content.res.ApkAssets.nativeLoad(Native Method)
+                                                                                                    	at android.content.res.ApkAssets.<init>(ApkAssets.java:295)
+                                                                                                    	at android.content.res.ApkAssets.loadFromPath(ApkAssets.java:144)
+                                                                                                    	at android.app.ResourcesManager.loadApkAssets(ResourcesManager.java:463)
+                                                                                                    	at android.app.ResourcesManager.access$000(ResourcesManager.java:76)
+                                                                                                    	at android.app.ResourcesManager$ApkAssetsSupplier.load(ResourcesManager.java:177)
+                                                                                                    	at android.app.ResourcesManager.createAssetManager(ResourcesManager.java:544)
+                                                                                                    	at android.app.ResourcesManager.createResourcesImpl(ResourcesManager.java:626)
+                                                                                                    	at android.app.ResourcesManager.findOrCreateResourcesImplForKeyLocked(ResourcesManager.java:681)
+                                                                                                    	at android.app.ResourcesManager.createResources(ResourcesManager.java:1037)
+                                                                                                    	at android.app.ResourcesManager.getResources(ResourcesManager.java:1140)
+                                                                                                    	at android.app.ActivityThread.getTopLevelResources(ActivityThread.java:2426)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2226)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2212)
+                                                                                                    	at android.app.ApplicationPackageManager.getDrawable(ApplicationPackageManager.java:1973)
+                                                                                                    	at android.app.ApplicationPackageManager.loadUnbadgedItemIcon(ApplicationPackageManager.java:3528)
+                                                                                                    	at android.content.pm.PackageItemInfo.loadUnbadgedIcon(PackageItemInfo.java:290)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.getBadgedIcon(SystemUIToast.java:284)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.inflateToastView(SystemUIToast.java:198)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:90)
+                                                                                                    	at com.android.systemui.toast.SystemUIToast.<init>(SystemUIToast.java:77)
+                                                                                                    	at com.android.systemui.toast.ToastFactory.createToast(ToastFactory.java:78)
+                                                                                                    	at com.android.systemui.toast.ToastUI.lambda$showToast$0(ToastUI.java:124)
+                                                                                                    	at com.android.systemui.toast.ToastUI.$r8$lambda$w_gPCh3F8Xxn1jN4lkQZoUci71c(Unknown Source:0)
+                                                                                                    	at com.android.systemui.toast.ToastUI$$ExternalSyntheticLambda0.run(Unknown Source:16)
+                                                                                                    	at com.android.systemui.toast.ToastUI.showToast(ToastUI.java:158)
+                                                                                                    	at com.android.systemui.statusbar.CommandQueue$H.handleMessage(CommandQueue.java:1471)
+                                                                                                    	at android.os.Handler.dispatchMessage(Handler.java:106)
+                                                                                                    	at android.os.Looper.loopOnce(Looper.java:210)
+                                                                                                    	at android.os.Looper.loop(Looper.java:299)
+                                                                                                    	at android.app.ActivityThread.main(ActivityThread.java:8122)
+                                                                                                    	at java.lang.reflect.Method.invoke(Native Method)
+                                                                                                    	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:565)
+                                                                                                    	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1045)
+2025-05-27 20:12:44.734 27420-27420 ImeFocusController      com.example.datagrindset             V  onWindowFocus: DecorView@f3cea9a[MainActivity] softInputMode=STATE_UNSPECIFIED|ADJUST_PAN
+2025-05-27 20:12:44.734 27420-27420 ImeFocusController      com.example.datagrindset             V  Restarting due to isRestartOnNextWindowFocus as true
+2025-05-27 20:12:44.735 27420-27420 ImeFocusController      com.example.datagrindset             D  onViewFocusChanged, view=DecorView@f3cea9a[MainActivity], mServedView=DecorView@f3cea9a[MainActivity]
+2025-05-27 20:12:44.737 27420-27420 ImeFocusController      com.example.datagrindset             V  checkFocus: view=DecorView@f3cea9a[MainActivity] next=DecorView@f3cea9a[MainActivity] force=true package=com.example.datagrindset
+2025-05-27 20:12:44.738  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:12:44.738 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true reason=WINDOW_FOCUS_GAIN
+2025-05-27 20:12:44.738 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: tba=android.view.inputmethod.EditorInfo@1f04ab1 ic=null
+2025-05-27 20:12:44.739 27420-27420 InputMethodManager      com.example.datagrindset             V  START INPUT: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true ic=null tba=android.view.inputmethod.EditorInfo@1f04ab1 startInputFlags=VIEW_HAS_FOCUS|INITIAL_CONNECTION
+2025-05-27 20:12:44.749 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: Bind result=InputBindResult{result=SUCCESS_WITH_IME_SESSION method=com.android.internal.view.IInputMethodSession$Stub$Proxy@ff7eb96 id=com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME sequence=4187 isInputMethodSuppressingSpellChecker=false}
+2025-05-27 20:12:44.750 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE true, was false
+2025-05-27 20:12:45.395 27420-27429 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117750209ms; Flags=0, FrameTimelineVsyncId=17588647, IntendedVsync=254286645528582, Vsync=254286645528582, InputEventId=1028334285, HandleInputStart=254286654639139, AnimationStart=254286668167316, PerformTraversalsStart=254286670187732, DrawStart=254286670286743, FrameDeadline=254286678861914, FrameInterval=254286654632003, FrameStartTime=16666666, SyncQueued=254286675072785, SyncStart=254286675148878, IssueDrawCommandsStart=254286675349035, SwapBuffers=254286677671587, FrameCompleted=9223372036854775807, DequeueBufferDuration=14531, QueueBufferDuration=500208, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254286678697889, DisplayPresentTime=0, 
+2025-05-27 20:12:45.512 27420-27429 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117750175ms; Flags=0, FrameTimelineVsyncId=17588651, IntendedVsync=254286678707796, Vsync=254286695374462, InputEventId=298581877, HandleInputStart=254286699479399, AnimationStart=254286699504868, PerformTraversalsStart=254286776824607, DrawStart=254286776961378, FrameDeadline=254286712041128, FrameInterval=254286699468305, FrameStartTime=16666666, SyncQueued=254286786575024, SyncStart=254286786664191, IssueDrawCommandsStart=254286786893930, SwapBuffers=254286788964087, FrameCompleted=9223372036854775807, DequeueBufferDuration=22656, QueueBufferDuration=834948, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254286795405962, DisplayPresentTime=0, 
+2025-05-27 20:12:45.674 27420-27420 Compatibil...geReporter com.example.datagrindset             D  Compat change id reported: 171228096; UID 10440; state: ENABLED
+2025-05-27 20:12:46.420 27420-27420 LFMViewModel            com.example.datagrindset             D  Preparing file for analysis: Притча.txt, URI: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTelegram/document/primary%3ADownload%2FTelegram%2F%D0%9F%D1%80%D0%B8%D1%82%D1%87%D0%B0.txt
+2025-05-27 20:12:46.421 27420-27420 LFMViewModel            com.example.datagrindset             D  Supported file type for analysis (TXT). Emitting requestOpenFileAnalysis.
+2025-05-27 20:12:46.423 27420-27420 MainActivity            com.example.datagrindset             D  Launching ACTION_OPEN_DOCUMENT for Притча.txt (Original URI: content://com.android.externalstorage.documents/tree/primary%3ADownload%2FTelegram/document/primary%3ADownload%2FTelegram%2F%D0%9F%D1%80%D0%B8%D1%82%D1%87%D0%B0.txt) with MIME types: text/plain, text/markdown
+2025-05-27 20:12:46.540 27420-27429 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117749147ms; Flags=0, FrameTimelineVsyncId=17588740, IntendedVsync=254287707477298, Vsync=254287724143964, InputEventId=19493302, HandleInputStart=254287725634555, AnimationStart=254287725662524, PerformTraversalsStart=254287815585753, DrawStart=254287815668201, FrameDeadline=254287724143964, FrameInterval=254287725624138, FrameStartTime=16666666, SyncQueued=254287822158461, SyncStart=254287822261794, IssueDrawCommandsStart=254287822386690, SwapBuffers=254287823445961, FrameCompleted=9223372036854775807, DequeueBufferDuration=14480, QueueBufferDuration=702500, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254287824954347, DisplayPresentTime=0, 
+2025-05-27 20:12:46.646  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:12:46.705 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE false, was true
+2025-05-27 20:12:46.705 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_UNBIND 4187 reason=SWITCH_CLIENT
+2025-05-27 20:12:46.705 27420-27420 InputMethodManager      com.example.datagrindset             V  Clearing binding!
+2025-05-27 20:12:47.155 27420-27464 OpenGLRenderer          com.example.datagrindset             D  endAllActiveAnimators on 0xb400007c4b99c700 (UnprojectedRipple) with handle 0xb400007b5b9a5330
+2025-05-27 20:12:49.329 27420-27557 AppScoutStateMachine    com.example.datagrindset             D  27420-ScoutStateMachinecreated
+2025-05-27 20:12:49.338 27420-27420 MainActivity            com.example.datagrindset             D  ACTION_OPEN_DOCUMENT returned: content://com.android.externalstorage.documents/document/primary%3ADownload%2FTelegram%2F%D0%9F%D1%80%D0%B8%D1%82%D1%87%D0%B0.txt for original: Притча.txt
+2025-05-27 20:12:49.338 27420-27420 MainActivity            com.example.datagrindset             D  Persisted permission for granted URI: content://com.android.externalstorage.documents/document/primary%3ADownload%2FTelegram%2F%D0%9F%D1%80%D0%B8%D1%82%D1%87%D0%B0.txt
+2025-05-27 20:12:49.346 27420-27420 ActivityJuiImpl         com.example.datagrindset             D  startSkipAd :package=com.example.datagrindset;getClassName=com.example.datagrindset.MainActivity;getShortClassName=.MainActivity
+2025-05-27 20:12:49.433  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:12:49.506 27420-27420 ImeFocusController      com.example.datagrindset             V  onWindowFocus: DecorView@f3cea9a[MainActivity] softInputMode=STATE_UNSPECIFIED|ADJUST_PAN
+2025-05-27 20:12:49.506 27420-27420 ImeFocusController      com.example.datagrindset             V  Restarting due to isRestartOnNextWindowFocus as true
+2025-05-27 20:12:49.506 27420-27420 ImeFocusController      com.example.datagrindset             D  onViewFocusChanged, view=DecorView@f3cea9a[MainActivity], mServedView=DecorView@f3cea9a[MainActivity]
+2025-05-27 20:12:49.506 27420-27420 ImeFocusController      com.example.datagrindset             V  checkFocus: view=DecorView@f3cea9a[MainActivity] next=DecorView@f3cea9a[MainActivity] force=true package=com.example.datagrindset
+2025-05-27 20:12:49.506 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true reason=WINDOW_FOCUS_GAIN
+2025-05-27 20:12:49.506 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: tba=android.view.inputmethod.EditorInfo@38ad986 ic=null
+2025-05-27 20:12:49.506 27420-27420 InputMethodManager      com.example.datagrindset             V  START INPUT: view=DecorView@f3cea9a[MainActivity],focus=false,windowFocus=true,autofillUiShowing=false,window=android.view.ViewRootImpl$W@986ffcb,displayId=0,temporaryDetach=false,hasImeFocus=true ic=null tba=android.view.inputmethod.EditorInfo@38ad986 startInputFlags=VIEW_HAS_FOCUS|INITIAL_CONNECTION
+2025-05-27 20:12:49.509 27420-27420 InputMethodManager      com.example.datagrindset             V  Starting input: Bind result=InputBindResult{result=SUCCESS_WITH_IME_SESSION method=com.android.internal.view.IInputMethodSession$Stub$Proxy@409a247 id=com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME sequence=4189 isInputMethodSuppressingSpellChecker=false}
+2025-05-27 20:12:49.510 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE true, was false
+2025-05-27 20:12:52.789 27420-27420 TxtFileViewModel        com.example.datagrindset             D  Initializing for URI: content://com.android.externalstorage.documents/document/primary:Download/Telegram/Притча.txt, FileName: Притча.txt
+2025-05-27 20:12:52.807 27420-27420 TxtFileViewModel        com.example.datagrindset             E  SecurityException loading content://com.android.externalstorage.documents/document/primary:Download/Telegram/Притча.txt (Притча.txt)
+                                                                                                    java.lang.SecurityException: Permission Denial: reading com.android.externalstorage.ExternalStorageProvider uri content://com.android.externalstorage.documents/document/primary:Download/Telegram/Притча.txt from pid=27420, uid=10440 requires that you obtain access using ACTION_OPEN_DOCUMENT or related APIs
+                                                                                                    	at android.os.Parcel.createExceptionOrNull(Parcel.java:2425)
+                                                                                                    	at android.os.Parcel.createException(Parcel.java:2409)
+                                                                                                    	at android.os.Parcel.readException(Parcel.java:2392)
+                                                                                                    	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:190)
+                                                                                                    	at android.database.DatabaseUtils.readExceptionWithFileNotFoundExceptionFromParcel(DatabaseUtils.java:153)
+                                                                                                    	at android.content.ContentProviderProxy.openTypedAssetFile(ContentProviderNative.java:780)
+                                                                                                    	at android.content.ContentResolver.openTypedAssetFileDescriptor(ContentResolver.java:2027)
+                                                                                                    	at android.content.ContentResolver.openAssetFileDescriptor(ContentResolver.java:1842)
+                                                                                                    	at android.content.ContentResolver.openInputStream(ContentResolver.java:1518)
+                                                                                                    	at com.example.datagrindset.viewmodel.TxtFileViewModel$loadFileNameAndContent$1.invokeSuspend(TxtFileViewModel.kt:126)
+                                                                                                    	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+                                                                                                    	at kotlinx.coroutines.internal.DispatchedContinuationKt.resumeCancellableWith(DispatchedContinuation.kt:359)
+                                                                                                    	at kotlinx.coroutines.intrinsics.CancellableKt.startCoroutineCancellable(Cancellable.kt:26)
+                                                                                                    	at kotlinx.coroutines.CoroutineStart.invoke(CoroutineStart.kt:358)
+                                                                                                    	at kotlinx.coroutines.AbstractCoroutine.start(AbstractCoroutine.kt:124)
+                                                                                                    	at kotlinx.coroutines.BuildersKt__Builders_commonKt.launch(Builders.common.kt:52)
+                                                                                                    	at kotlinx.coroutines.BuildersKt.launch(Unknown Source:1)
+                                                                                                    	at kotlinx.coroutines.BuildersKt__Builders_commonKt.launch$default(Builders.common.kt:43)
+                                                                                                    	at kotlinx.coroutines.BuildersKt.launch$default(Unknown Source:1)
+                                                                                                    	at com.example.datagrindset.viewmodel.TxtFileViewModel.loadFileNameAndContent(TxtFileViewModel.kt:117)
+                                                                                                    	at com.example.datagrindset.viewmodel.TxtFileViewModel.<init>(TxtFileViewModel.kt:113)
+                                                                                                    	at com.example.datagrindset.TxtFileViewModelFactory.create(TxtFileViewModelFactory.kt:26)
+                                                                                                    	at androidx.lifecycle.ViewModelProvider$Factory.create(ViewModelProvider.android.kt:148)
+                                                                                                    	at androidx.lifecycle.ViewModelProvider$Factory.create(ViewModelProvider.android.kt:153)
+                                                                                                    	at androidx.lifecycle.viewmodel.ViewModelProviderImpl_androidKt.createViewModel(ViewModelProviderImpl.android.kt:34)
+                                                                                                    	at androidx.lifecycle.viewmodel.ViewModelProviderImpl.getViewModel$lifecycle_viewmodel_release(ViewModelProviderImpl.kt:60)
+                                                                                                    	at androidx.lifecycle.viewmodel.ViewModelProviderImpl.getViewModel$lifecycle_viewmodel_release$default(ViewModelProviderImpl.kt:43)
+                                                                                                    	at androidx.lifecycle.ViewModelProvider.get(ViewModelProvider.android.kt:92)
+                                                                                                    	at androidx.lifecycle.viewmodel.compose.ViewModelKt__ViewModelKt.get(ViewModel.kt:172)
+                                                                                                    	at androidx.lifecycle.viewmodel.compose.ViewModelKt.get(Unknown Source:1)
+                                                                                                    	at androidx.lifecycle.viewmodel.compose.ViewModelKt__ViewModelKt.viewModel(ViewModel.kt:106)
+                                                                                                    	at androidx.lifecycle.viewmodel.compose.ViewModelKt.viewModel(Unknown Source:1)
+                                                                                                    	at com.example.datagrindset.MainActivity$onCreate$1$1$6$4.invoke(MainActivity.kt:297)
+                                                                                                    	at com.example.datagrindset.MainActivity$onCreate$1$1$6$4.invoke(MainActivity.kt:256)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:139)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:35)
+                                                                                                    	at androidx.navigation.compose.NavHostKt$NavHost$32$1.invoke(NavHost.kt:703)
+                                                                                                    	at androidx.navigation.compose.NavHostKt$NavHost$32$1.invoke(NavHost.kt:702)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:109)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:35)
+2025-05-27 20:12:52.808 27420-27420 TxtFileViewModel        com.example.datagrindset             E  	at androidx.compose.runtime.CompositionLocalKt.CompositionLocalProvider(CompositionLocal.kt:401)
+                                                                                                    	at androidx.compose.runtime.saveable.SaveableStateHolderImpl.SaveableStateProvider(SaveableStateHolder.kt:85)
+                                                                                                    	at androidx.navigation.compose.NavBackStackEntryProviderKt.SaveableStateProvider(NavBackStackEntryProvider.kt:69)
+                                                                                                    	at androidx.navigation.compose.NavBackStackEntryProviderKt.access$SaveableStateProvider(NavBackStackEntryProvider.kt:1)
+                                                                                                    	at androidx.navigation.compose.NavBackStackEntryProviderKt$LocalOwnersProvider$1.invoke(NavBackStackEntryProvider.kt:56)
+                                                                                                    	at androidx.navigation.compose.NavBackStackEntryProviderKt$LocalOwnersProvider$1.invoke(NavBackStackEntryProvider.kt:55)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:109)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:35)
+                                                                                                    	at androidx.compose.runtime.CompositionLocalKt.CompositionLocalProvider(CompositionLocal.kt:380)
+                                                                                                    	at androidx.navigation.compose.NavBackStackEntryProviderKt.LocalOwnersProvider(NavBackStackEntryProvider.kt:51)
+                                                                                                    	at androidx.navigation.compose.NavHostKt$NavHost$32.invoke(NavHost.kt:702)
+                                                                                                    	at androidx.navigation.compose.NavHostKt$NavHost$32.invoke(NavHost.kt:682)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:139)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:35)
+                                                                                                    	at androidx.compose.animation.AnimatedContentKt$AnimatedContent$6$1$5.invoke(AnimatedContent.kt:803)
+                                                                                                    	at androidx.compose.animation.AnimatedContentKt$AnimatedContent$6$1$5.invoke(AnimatedContent.kt:792)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:118)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:35)
+                                                                                                    	at androidx.compose.animation.AnimatedVisibilityKt.AnimatedEnterExitImpl(AnimatedVisibility.kt:771)
+                                                                                                    	at androidx.compose.animation.AnimatedContentKt$AnimatedContent$6$1.invoke(AnimatedContent.kt:774)
+                                                                                                    	at androidx.compose.animation.AnimatedContentKt$AnimatedContent$6$1.invoke(AnimatedContent.kt:757)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:109)
+                                                                                                    	at androidx.compose.runtime.internal.ComposableLambdaImpl.invoke(ComposableLambda.jvm.kt:35)
+                                                                                                    	at androidx.compose.animation.AnimatedContentKt.AnimatedContent(AnimatedContent.kt:816)
+                                                                                                    	at androidx.navigation.compose.NavHostKt.NavHost(NavHost.kt:654)
+                                                                                                    	at androidx.navigation.compose.NavHostKt.NavHost$lambda$80(Unknown Source:25)
+                                                                                                    	at androidx.navigation.compose.NavHostKt.$r8$lambda$7ClW2Jn3MXjuytbJNUtxFpbxrgs(Unknown Source:0)
+                                                                                                    	at androidx.navigation.compose.NavHostKt$$ExternalSyntheticLambda23.invoke(D8$$SyntheticClass:0)
+                                                                                                    	at androidx.compose.runtime.RecomposeScopeImpl.compose(RecomposeScopeImpl.kt:192)
+                                                                                                    	at androidx.compose.runtime.ComposerImpl.recomposeToGroupEnd(Composer.kt:2825)
+                                                                                                    	at androidx.compose.runtime.ComposerImpl.skipCurrentGroup(Composer.kt:3116)
+                                                                                                    	at androidx.compose.runtime.ComposerImpl.doCompose(Composer.kt:3607)
+                                                                                                    	at androidx.compose.runtime.ComposerImpl.recompose$runtime_release(Composer.kt:3552)
+                                                                                                    	at androidx.compose.runtime.CompositionImpl.recompose(Composition.kt:948)
+                                                                                                    	at androidx.compose.runtime.Recomposer.performRecompose(Recomposer.kt:1206)
+                                                                                                    	at androidx.compose.runtime.Recomposer.access$performRecompose(Recomposer.kt:132)
+                                                                                                    	at androidx.compose.runtime.Recomposer$runRecomposeAndApplyChanges$2$1.invoke(Recomposer.kt:616)
+                                                                                                    	at androidx.compose.runtime.Recomposer$runRecomposeAndApplyChanges$2$1.invoke(Recomposer.kt:585)
+                                                                                                    	at androidx.compose.ui.platform.AndroidUiFrameClock$withFrameNanos$2$callback$1.doFrame(AndroidUiFrameClock.android.kt:41)
+                                                                                                    	at androidx.compose.ui.platform.AndroidUiDispatcher.performFrameDispatch(AndroidUiDispatcher.android.kt:109)
+                                                                                                    	at androidx.compose.ui.platform.AndroidUiDispatcher.access$performFrameDispatch(AndroidUiDispatcher.android.kt:41)
+2025-05-27 20:12:52.809 27420-27420 TxtFileViewModel        com.example.datagrindset             E  	at androidx.compose.ui.platform.AndroidUiDispatcher$dispatchCallback$1.doFrame(AndroidUiDispatcher.android.kt:69)
+                                                                                                    	at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1140)
+                                                                                                    	at android.view.Choreographer.doCallbacks(Choreographer.java:946)
+                                                                                                    	at android.view.Choreographer.doFrame(Choreographer.java:870)
+                                                                                                    	at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1127)
+                                                                                                    	at android.os.Handler.handleCallback(Handler.java:938)
+                                                                                                    	at android.os.Handler.dispatchMessage(Handler.java:99)
+                                                                                                    	at android.os.Looper.loopOnce(Looper.java:210)
+                                                                                                    	at android.os.Looper.loop(Looper.java:299)
+                                                                                                    	at android.app.ActivityThread.main(ActivityThread.java:8122)
+                                                                                                    	at java.lang.reflect.Method.invoke(Native Method)
+                                                                                                    	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:565)
+                                                                                                    	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1045)
+2025-05-27 20:12:53.023 27420-27557 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117742832ms; Flags=0, FrameTimelineVsyncId=17589396, IntendedVsync=254294021703553, Vsync=254294021703553, InputEventId=337707837, HandleInputStart=254294022296532, AnimationStart=254294044423198, PerformTraversalsStart=254294208424761, DrawStart=254294280548355, FrameDeadline=254294038370219, FrameInterval=254294022277834, FrameStartTime=16666666, SyncQueued=254294289600282, SyncStart=254294289773719, IssueDrawCommandsStart=254294290508250, SwapBuffers=254294298155177, FrameCompleted=9223372036854775807, DequeueBufferDuration=44844, QueueBufferDuration=1246511, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254294306380542, DisplayPresentTime=0, 
+2025-05-27 20:12:53.138 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor doFrame : time=43ms vsyncFrame=0 latency=326ms procState=-1 historyMsgCount=2 (msgIndex=1 wall=268ms seq=342 late=1ms h=android.view.Choreographer$FrameHandler c=android.view.Choreographer$FrameDisplayEventReceiver)
+2025-05-27 20:12:53.155 27420-27557 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117742799ms; Flags=0, FrameTimelineVsyncId=17589398, IntendedVsync=254294054859579, Vsync=254294371526233, InputEventId=367183411, HandleInputStart=254294380181271, AnimationStart=254294380223250, PerformTraversalsStart=254294405619396, DrawStart=254294420457938, FrameDeadline=254294088192911, FrameInterval=254294380167573, FrameStartTime=16666666, SyncQueued=254294423402104, SyncStart=254294423549604, IssueDrawCommandsStart=254294423834136, SwapBuffers=254294431947104, FrameCompleted=9223372036854775807, DequeueBufferDuration=23698, QueueBufferDuration=835156, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254294438434084, DisplayPresentTime=0, 
+2025-05-27 20:12:55.980 27420-27420 MIUIInput               com.example.datagrindset             D  [KeyEvent] ViewRootImpl KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_BACK, scanCode=0, metaState=0, flags=0x48, repeatCount=0, eventTime=254297255, downTime=254297255, deviceId=-1, source=0x101, displayId=0 }
+2025-05-27 20:12:55.980 27420-27420 InputMethodManager      com.example.datagrindset             V  DISPATCH INPUT EVENT: com.android.internal.view.IInputMethodSession$Stub$Proxy@409a247
+2025-05-27 20:12:56.065 27420-27420 MIUIInput               com.example.datagrindset             D  [KeyEvent] ViewRootImpl KeyEvent { action=ACTION_UP, keyCode=KEYCODE_BACK, scanCode=0, metaState=0, flags=0x48, repeatCount=0, eventTime=254297346, downTime=254297255, deviceId=-1, source=0x101, displayId=0 }
+2025-05-27 20:12:56.065 27420-27420 InputMethodManager      com.example.datagrindset             V  DISPATCH INPUT EVENT: com.android.internal.view.IInputMethodSession$Stub$Proxy@409a247
+2025-05-27 20:12:56.519 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor doFrame : time=414ms vsyncFrame=0 latency=1ms procState=-1
+2025-05-27 20:12:56.519 27420-27420 MIUIInput               com.example.datagrindset             D  [KeyEvent] ViewRootImpl KeyEvent { action=ACTION_DOWN, keyCode=KEYCODE_BACK, scanCode=0, metaState=0, flags=0x48, repeatCount=0, eventTime=254297747, downTime=254297747, deviceId=-1, source=0x101, displayId=0 }
+2025-05-27 20:12:56.519 27420-27420 InputMethodManager      com.example.datagrindset             V  DISPATCH INPUT EVENT: com.android.internal.view.IInputMethodSession$Stub$Proxy@409a247
+2025-05-27 20:12:56.555 27420-27420 Looper                  com.example.datagrindset             W  PerfMonitor doFrame : time=14ms vsyncFrame=0 latency=420ms procState=-1 historyMsgCount=2 (msgIndex=1 wall=414ms seq=426 late=1ms h=android.view.Choreographer$FrameHandler c=android.view.Choreographer$FrameDisplayEventReceiver)
+2025-05-27 20:12:56.555 27420-27420 MIUIInput               com.example.datagrindset             D  [KeyEvent] ViewRootImpl KeyEvent { action=ACTION_UP, keyCode=KEYCODE_BACK, scanCode=0, metaState=0, flags=0x48, repeatCount=0, eventTime=254297824, downTime=254297747, deviceId=-1, source=0x101, displayId=0 }
+2025-05-27 20:12:56.555 27420-27420 InputMethodManager      com.example.datagrindset             V  DISPATCH INPUT EVENT: com.android.internal.view.IInputMethodSession$Stub$Proxy@409a247
+2025-05-27 20:12:56.682  4078-4422  ActivityManagerWrapper  pid-4078                             E  getRecentTasks: taskId=16543   userId=0   baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] flg=0x10000000 cmp=com.example.datagrindset/.MainActivity }
+2025-05-27 20:12:56.686 27420-27557 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738917ms; Flags=0, FrameTimelineVsyncId=17589700, IntendedVsync=254297937253034, Vsync=254297937253034, InputEventId=0, HandleInputStart=254297939301530, AnimationStart=254297939303093, PerformTraversalsStart=254297942612207, DrawStart=254297942737989, FrameDeadline=254297970586366, FrameInterval=254297939285384, FrameStartTime=16666666, SyncQueued=254297942785593, SyncStart=254297942859759, IssueDrawCommandsStart=254297943023457, SwapBuffers=254297943323353, FrameCompleted=9223372036854775807, DequeueBufferDuration=10833, QueueBufferDuration=285990, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254297943784916, DisplayPresentTime=0, 
+2025-05-27 20:12:56.707 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_SET_ACTIVE false, was true
+2025-05-27 20:12:56.707 27420-27420 InputMethodManager      com.example.datagrindset             I  handleMessage: MSG_UNBIND 4189 reason=SWITCH_CLIENT
+2025-05-27 20:12:56.707 27420-27420 InputMethodManager      com.example.datagrindset             V  Clearing binding!
+2025-05-27 20:12:56.718 27420-27556 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738899ms; Flags=0, FrameTimelineVsyncId=17589703, IntendedVsync=254297953851242, Vsync=254297953851242, InputEventId=0, HandleInputStart=254297954574395, AnimationStart=254297954577884, PerformTraversalsStart=254297957209811, DrawStart=254297957454395, FrameDeadline=254297987184574, FrameInterval=254297954547676, FrameStartTime=16666666, SyncQueued=254297957509864, SyncStart=254297958593145, IssueDrawCommandsStart=254297958878301, SwapBuffers=254297959237051, FrameCompleted=9223372036854775807, DequeueBufferDuration=10729, QueueBufferDuration=31635208, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254297991308041, DisplayPresentTime=0, 
+2025-05-27 20:12:56.737 27420-27556 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738868ms; Flags=0, FrameTimelineVsyncId=17589706, IntendedVsync=254297970449823, Vsync=254297970449823, InputEventId=0, HandleInputStart=254297971087103, AnimationStart=254297971089134, PerformTraversalsStart=254297974934603, DrawStart=254297975069082, FrameDeadline=254298003783155, FrameInterval=254297971064395, FrameStartTime=16666666, SyncQueued=254297975118405, SyncStart=254297991415749, IssueDrawCommandsStart=254297991558249, SwapBuffers=254297991866166, FrameCompleted=9223372036854775807, DequeueBufferDuration=12605, QueueBufferDuration=12885729, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254298005296374, DisplayPresentTime=0, 
+2025-05-27 20:12:56.804 27420-27557 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738850ms; Flags=0, FrameTimelineVsyncId=17589712, IntendedVsync=254298003656307, Vsync=254298003656307, InputEventId=0, HandleInputStart=254298007106061, AnimationStart=254298007108093, PerformTraversalsStart=254298009146009, DrawStart=254298009243093, FrameDeadline=254298036989639, FrameInterval=254298007092572, FrameStartTime=16666666, SyncQueued=254298009282259, SyncStart=254298009660228, IssueDrawCommandsStart=254298009775072, SwapBuffers=254298023331582, FrameCompleted=9223372036854775807, DequeueBufferDuration=13224063, QueueBufferDuration=967656, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254298024528666, DisplayPresentTime=0, 
+2025-05-27 20:12:56.821 27420-27557 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738833ms; Flags=0, FrameTimelineVsyncId=17589715, IntendedVsync=254298020262578, Vsync=254298020262578, InputEventId=0, HandleInputStart=254298021080645, AnimationStart=254298021082207, PerformTraversalsStart=254298022988041, DrawStart=254298023081791, FrameDeadline=254298053595910, FrameInterval=254298021066582, FrameStartTime=16666666, SyncQueued=254298023117728, SyncStart=254298024600280, IssueDrawCommandsStart=254298024896582, SwapBuffers=254298056684447, FrameCompleted=9223372036854775807, DequeueBufferDuration=31448646, QueueBufferDuration=17340834, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254298074301947, DisplayPresentTime=0, 
+2025-05-27 20:12:56.836 27420-27557 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738783ms; Flags=0, FrameTimelineVsyncId=17589717, IntendedVsync=254298036886605, Vsync=254298036886605, InputEventId=0, HandleInputStart=254298037327832, AnimationStart=254298037329603, PerformTraversalsStart=254298039597728, DrawStart=254298039748457, FrameDeadline=254298070219937, FrameInterval=254298037309759, FrameStartTime=16666666, SyncQueued=254298039796009, SyncStart=254298074419395, IssueDrawCommandsStart=254298074650384, SwapBuffers=254298090028041, FrameCompleted=9223372036854775807, DequeueBufferDuration=15002032, QueueBufferDuration=14031510, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254298104366947, DisplayPresentTime=0, 
+2025-05-27 20:12:56.853 27420-27429 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738776ms; Flags=0, FrameTimelineVsyncId=17589718, IntendedVsync=254298053494140, Vsync=254298070160806, InputEventId=0, HandleInputStart=254298076690905, AnimationStart=254298076692988, PerformTraversalsStart=254298078968666, DrawStart=254298079124447, FrameDeadline=254298086827472, FrameInterval=254298076661270, FrameStartTime=16666666, SyncQueued=254298079176270, SyncStart=254298104454186, IssueDrawCommandsStart=254298104750332, SwapBuffers=254298107761270, FrameCompleted=9223372036854775807, DequeueBufferDuration=2055417, QueueBufferDuration=21426927, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254298129371322, DisplayPresentTime=0, 
+2025-05-27 20:12:56.953 27420-27429 OpenGLRenderer          com.example.datagrindset             I  Davey! duration=9223117738734ms; Flags=0, FrameTimelineVsyncId=17589725, IntendedVsync=254298119877843, Vsync=254298119877843, InputEventId=0, HandleInputStart=254298132812468, AnimationStart=254298132813509, PerformTraversalsStart=254298202471895, DrawStart=254298209581843, FrameDeadline=254298153211175, FrameInterval=254298132800645, FrameStartTime=16666666, SyncQueued=254298210257520, SyncStart=254298210333978, IssueDrawCommandsStart=254298210493509, SwapBuffers=254298211378301, FrameCompleted=9223372036854775807, DequeueBufferDuration=10886, QueueBufferDuration=219584, GpuCompleted=9223372036854775807, SwapBuffersCompleted=254298211783666, DisplayPresentTime=0, 
+---------------------------- PROCESS ENDED (27420) for package com.example.datagrindset ----------------------------
