@@ -4458,3 +4458,70 @@ strings-ru:
     <string name="csv_analysis_filter_dialog_confirm">Применить</string>
     <string name="csv_analysis_row_number_header">Стр. №</string>
 </resources>
+TxtViewModelFactory:
+package com.example.datagrindset
+
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import com.example.datagrindset.viewmodel.TxtFileViewModel
+
+
+//class TxtFileViewModelFactory(
+//    private val application: Application,
+//    private val initialFileUri: Uri
+//) : ViewModelProvider.Factory {
+//    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+//        if (modelClass.isAssignableFrom(TxtFileViewModel::class.java)) {
+//            @Suppress("UNCHECKED_CAST")
+//            return TxtFileViewModel(application, initialFileUri) as T
+//        }
+//        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+//    }
+//}
+class TxtFileViewModelFactory(private val application: Application, private val fileUri: Uri, private val initialFileName: String) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(TxtFileViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return TxtFileViewModel(application, fileUri, initialFileName) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class for TxtFileViewModelFactory")
+    }
+}
+CsvViewModelFactory:
+package com.example.datagrindset.viewmodel
+
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+
+class CsvFileViewModelFactory(
+    private val application: Application,
+    private val initialFileUri: Uri,
+    private val initialFileName: String
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(CsvFileViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return CsvFileViewModel(application, initialFileUri, initialFileName) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+    }
+}
+LocalFileManagerViewModelFactory:
+package com.example.datagrindset.viewmodel
+import android.app.Application
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+
+class LocalFileManagerViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(LocalFileManagerViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return LocalFileManagerViewModel(application) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
